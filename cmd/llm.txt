@@ -1,0 +1,114 @@
+# Gydnc CLI Interaction for LLM Guidance
+
+This document outlines how an LLM should interact with the `gydnc` CLI to manage and retrieve guidance.
+
+## Standard Interaction Flow:
+
+1.  **List Available Guidance (Aliases and CIDs):**
+    Run the command:
+    ```bash
+    gydnc list
+    ```
+    This will output a list of known guidance aliases, their current CIDs, titles, and tags.
+
+    *To filter by tags or other metadata:*
+    ```bash
+    gydnc list --filter "type:behavior scope:core tier:must"
+    ```
+
+2.  **Identify Relevant Alias or CID:**
+    Analyze the output from `gydnc list`. Based on the current task, identify the relevant alias (e.g., `core-safety`) or a specific CID if a particular version is needed.
+
+3.  **Fetch Full Guidance Content:**
+    To get the latest version of an alias:
+    ```bash
+    gydnc get <alias_name>
+    ```
+    Example:
+    ```bash
+    gydnc get core-safety
+    ```
+
+    To get a specific version by CID:
+    ```bash
+    gydnc get <CID>
+    ```
+    Example:
+    ```bash
+    gydnc get sha256-abcdef123456...
+    ```
+
+    To get a specific version of an alias (e.g., a previous version or one from a Git ref):
+    ```bash
+    gydnc get <alias_name> --version <target_CID | "previous" | git_ref>
+    ```
+    Example:
+    ```bash
+    gydnc get core-safety --version "previous"
+    gydnc get core-safety --version "main~1"
+    ```
+
+4.  **Proceed with Task:**
+    Use the full guidance content (metadata and body) obtained in step 3 to guide the execution of the task.
+
+## Creating New Guidance:
+
+Command Structure:
+```bash
+gydnc create guidance --alias <alias_name> --title "<Title>" --tags "<tag1,tag2>" [--body-from-file <path> | pipe body to stdin] [--reason "<change_reason>"]
+```
+-   `--alias <alias_name>`: A unique, human-readable alias for the new guidance.
+-   `--title "<Title>"`: The title for the guidance.
+-   `--tags "<tag1,tag2>"`: Comma-separated tags (e.g., "type:recipe,scope:api").
+-   Body content can be provided by piping to `stdin` or from a file.
+-   `--reason "<change_reason>"`: Optional reason for creating this guidance.
+
+Example:
+```bash
+echo "### Section 1..." | gydnc create guidance --alias "new-guidance" --title "My New Guidance" --tags "type:recipe,scope:api" --reason "Initial draft"
+```
+
+## Updating Existing Guidance:
+
+Command Structure:
+```bash
+gydnc update <alias_or_CID> [--title "<New Title>"] [--tags-add "<tag_to_add>"] [--tags-remove "<tag_to_remove>"] [--body-from-file <path> | pipe body to stdin] [--reason "<change_reason>"]
+```
+-   `<alias_or_CID>`: The alias or CID of the guidance to update.
+-   Flags are used to specify which parts to update.
+-   Updating creates a new version with a new CID. The original remains accessible via its CID.
+-   If an alias is provided, it will point to the newly created version.
+
+Example:
+```bash
+echo "## Updated Body" | gydnc update core-safety --title "Core Safety Protocol v2" --tags-add "status:revised" --reason "Annual review update"
+```
+
+## Other Useful Commands:
+
+*   **`gydnc cid <alias_or_content>`**: Calculate CID for an alias's current version or for content piped in.
+    ```bash
+    gydnc cid core-safety
+    echo "## Some content" | gydnc cid
+    ```
+
+*   **`gydnc link <alias> <CID>`**: Make an alias point to a specific CID.
+    ```bash
+    gydnc link stable-release sha256-xxxxxyyyyzzzz...
+    ```
+
+*   **`gydnc log <alias>`**: Show version history for an alias (uses Git log and pCID chain).
+    ```bash
+    gydnc log core-safety
+    ```
+
+*   **`gydnc verify <alias_or_CID>`**: Verify integrity of guidance content and pCID chain.
+    ```bash
+    gydnc verify core-safety
+    gydnc verify sha256-xxxxxyyyyzzzz...
+    ```
+
+Adhere to the specific command flags and structures as detailed in the `gydnc` help output for each command.
+Always ensure you are using the correct alias or CID for operations.
+The `gydnc` system relies on content-addressability, so "updates" result in new CIDs.
+The `pCID` field in a guidance entity's metadata links it to its previous version.
