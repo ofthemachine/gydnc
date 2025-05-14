@@ -77,15 +77,28 @@ func buildGydncOnce(t *testing.T) string {
 		return "./gydnc"
 	}
 
+	// Determine project root (one level up from the current file's dir)
+	// This assumes the test file is in a direct subdirectory of the project root (e.g., ./tests)
+	projectRoot := ".."
+
 	cmd := exec.Command("make", "build")
+	cmd.Dir = projectRoot // Set the working directory for make
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		gydncBuildErr = fmt.Errorf("failed to build gydnc for testing: %v\nOutput:\n%s", err, string(output))
+		gydncBuildErr = fmt.Errorf("failed to build gydnc for testing (cwd: %s): %v\nOutput:\n%s", projectRoot, err, string(output))
 		t.Fatalf("%s", gydncBuildErr.Error())
 	}
 	gydncBuilt = true
 	t.Log("gydnc binary built successfully for testing.")
-	return "./gydnc" // Path relative to project root
+	// The path returned should be relative to where the test binary expects it when copying.
+	// If copyFile expects a path relative to project root, then filepath.Join(projectRoot, "gydnc") is correct.
+	// The current copyFile in the harness uses the returned path directly, assuming it's accessible.
+	// Let's return an absolute path or a path clearly relative to project root for clarity.
+	absProjectRoot, err := filepath.Abs(projectRoot)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path for project root %s: %v", projectRoot, err)
+	}
+	return filepath.Join(absProjectRoot, "gydnc") // Path for the built binary
 }
 
 func TestCLI(t *testing.T) {
@@ -151,44 +164,64 @@ func TestCLI(t *testing.T) {
 	}
 }
 
-func discoverTestCases(dir string) ([]CLITestCase, error) {
+func discoverTestCases(baseDir string) ([]CLITestCase, error) {
 	var cases []CLITestCase
-	entries, err := os.ReadDir(dir)
+
+	// Walk the baseDir to find test case directories.
+	// A test case directory is expected to be a grandchild of baseDir,
+	// e.g., baseDir/suiteName/testCaseName/
+	// and must contain act.sh and assert.yml.
+
+	suiteEntries, err := os.ReadDir(baseDir)
 	if err != nil {
-		// If the base test directory doesn't exist, return empty list, not error
 		if os.IsNotExist(err) {
-			return cases, nil
+			return cases, nil // No suites found, no tests
 		}
-		return nil, fmt.Errorf("reading test directory %s: %w", dir, err)
+		return nil, fmt.Errorf("reading base test directory %s: %w", baseDir, err)
 	}
 
-	for _, entry := range entries {
-		if !entry.IsDir() {
+	for _, suiteEntry := range suiteEntries {
+		if !suiteEntry.IsDir() {
 			continue
 		}
-		testCaseName := entry.Name()
-		testCasePath := filepath.Join(dir, testCaseName)
+		suiteName := suiteEntry.Name()
+		suitePath := filepath.Join(baseDir, suiteName)
 
-		// Check for required act.sh and assert.yml
-		actScriptPath := filepath.Join(testCasePath, "act.sh")
-		assertFilePath := filepath.Join(testCasePath, "assert.yml")
-
-		if _, err := os.Stat(actScriptPath); os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "Warning: Skipping test case '%s': missing act.sh\n", testCaseName)
-			continue
-		}
-		if _, err := os.Stat(assertFilePath); os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "Warning: Skipping test case '%s': missing assert.yml\n", testCaseName)
+		testCaseEntries, err := os.ReadDir(suitePath)
+		if err != nil {
+			// Log warning but continue, one suite being unreadable shouldn't stop others
+			fmt.Fprintf(os.Stderr, "Warning: could not read test suite directory %s: %v\n", suitePath, err)
 			continue
 		}
 
-		cases = append(cases, CLITestCase{
-			Name:        testCaseName,
-			Path:        testCasePath,
-			ArrangeFile: filepath.Join(testCasePath, "arrange.yml"), // Optional file
-			ActScript:   actScriptPath,                              // Required file
-			AssertFile:  assertFilePath,                             // Required file
-		})
+		for _, testCaseEntry := range testCaseEntries {
+			if !testCaseEntry.IsDir() {
+				continue
+			}
+			testCaseName := testCaseEntry.Name()
+			fullTestCaseName := filepath.Join(suiteName, testCaseName) // e.g., "core/01_list_fails_no_config"
+			testCasePath := filepath.Join(suitePath, testCaseName)
+
+			actScriptPath := filepath.Join(testCasePath, "act.sh")
+			assertFilePath := filepath.Join(testCasePath, "assert.yml")
+
+			if _, err := os.Stat(actScriptPath); os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "Warning: Skipping test case '%s': missing act.sh in %s\n", fullTestCaseName, testCasePath)
+				continue
+			}
+			if _, err := os.Stat(assertFilePath); os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "Warning: Skipping test case '%s': missing assert.yml in %s\n", fullTestCaseName, testCasePath)
+				continue
+			}
+
+			cases = append(cases, CLITestCase{
+				Name:        fullTestCaseName, // Use combined name for t.Run
+				Path:        testCasePath,
+				ArrangeFile: filepath.Join(testCasePath, "arrange.yml"),
+				ActScript:   actScriptPath,
+				AssertFile:  assertFilePath,
+			})
+		}
 	}
 	return cases, nil
 }

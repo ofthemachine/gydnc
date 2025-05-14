@@ -1,0 +1,26 @@
+exit_code: 0
+stdout:
+  - match_type: SUBSTRING # Message from init
+    content: "gydnc initialized successfully in"
+  - match_type: SUBSTRING # Message from create
+    content: "Created guidance file:"
+  - match_type: SUBSTRING # Actual file name part, now directly in .gydnc/category/
+    content: "/.gydnc/category/my-sub-guidance.g6e"
+stderr: # Allow INFO logs from init and potentially create
+  - match_type: SUBSTRING
+    content: ""
+filesystem:
+  - path: ".gydnc/category/my-sub-guidance.g6e"
+    exists: true
+  - path: ".gydnc/category/my-sub-guidance.g6e"
+    match_type: SUBSTRING
+    content: "id: "
+  - path: ".gydnc/category/my-sub-guidance.g6e"
+    match_type: SUBSTRING
+    content: "title: my-sub-guidance" # Title is derived from the last part of the alias
+  - path: ".gydnc/category/my-sub-guidance.g6e"
+    match_type: SUBSTRING
+    content: "# my-sub-guidance"
+  - path: ".gydnc/category/my-sub-guidance.g6e"
+    match_type: SUBSTRING
+    content: "Guidance content for 'my-sub-guidance' goes here."

@@ -22,7 +22,7 @@ test:
 .PHONY: test-integration
 test-integration:
 	@echo "Running integration tests..."
-	go test -tags=integration . -v # -v for verbose output, test current dir
+	go test ./tests -v -tags=integration
 
 fmt:
 	@echo "Formatting code..."

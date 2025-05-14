@@ -1,0 +1,35 @@
+exit_code: 0
+stdout:
+  - match_type: SUBSTRING # Message from init
+    content: "gydnc initialized successfully in"
+  - match_type: SUBSTRING # Path in init message
+    content: "subdir_cfg_create"
+  - match_type: SUBSTRING # Message from create
+    content: "Created guidance file:"
+  - match_type: SUBSTRING # Actual file name part for create
+    content: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
+stderr: # Allow INFO logs from init and potentially create
+  - match_type: SUBSTRING
+    content: ""
+filesystem:
+  - path: "subdir_cfg_create/config.yml"
+    exists: true
+  - path: "subdir_cfg_create/TAG_ONTOLOGY.md"
+    exists: true
+  - path: "subdir_cfg_create/.gydnc"
+    exists: true
+    is_dir: true
+  - path: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
+    exists: true
+  - path: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
+    match_type: SUBSTRING
+    content: "id: "
+  - path: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
+    match_type: SUBSTRING
+    content: "title: my-cfg-guidance"
+  - path: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
+    match_type: SUBSTRING
+    content: "# my-cfg-guidance"
+  - path: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
+    match_type: SUBSTRING
+    content: "Guidance content for 'my-cfg-guidance' goes here."

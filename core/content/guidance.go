@@ -30,6 +30,14 @@ type frontmatterYAML struct {
 	Tags        []string `yaml:"tags,omitempty"`
 }
 
+// StandardFrontmatter defines the complete set of metadata fields for a new guidance entity.
+type StandardFrontmatter struct {
+	ID          string   `yaml:"id"`
+	Title       string   `yaml:"title"`
+	Description string   `yaml:"description,omitempty"`
+	Tags        []string `yaml:"tags,omitempty"`
+}
+
 // ParseG6E takes the raw byte content of a .g6e file and parses it
 // into its frontmatter (unmarshaled into GuidanceContent) and Markdown body.
 // It enforces strict frontmatter delimiter rules: starts with "---\n" and has a closing "\n---\n".

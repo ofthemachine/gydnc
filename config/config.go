@@ -3,6 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+
+	"log/slog"
 
 	"gopkg.in/yaml.v3"
 )
@@ -59,15 +62,36 @@ func Load(cliConfigPath string) (*Config, error) {
 		configFilePath = os.Getenv("GYDNC_CONFIG")
 	}
 
+	// If still no path, try the default location: ./.gydnc/config.yml
 	if configFilePath == "" {
-		// No explicit config path provided, return a basic default config.
-		// Commands requiring specific paths (like backend path) will need to handle this.
-		// fmt.Println("No config file specified via --config or GYDNC_CONFIG. Using defaults.")
-		cfg := NewDefaultConfig()
-		globalConfig = cfg
-		return cfg, nil
+		// Check current directory first
+		wd, err := os.Getwd()
+		if err == nil { // If we can get CWD, try it
+			defaultPath := filepath.Join(wd, "config.yml") // Look for config.yml at the root
+			if _, err := os.Stat(defaultPath); err == nil {
+				configFilePath = defaultPath
+				slog.Debug("No explicit config path, using default found at", "path", configFilePath)
+			} else if !os.IsNotExist(err) {
+				// Log a warning if stat fails for a reason other than NotExist for the default path
+				slog.Warn("Error checking default config path ./config.yml", "error", err)
+			}
+		} else {
+			slog.Warn("Could not get current working directory to check for default config.")
+		}
+		// Future: could implement upward search from CWD for .gydnc directory here
 	}
 
+	if configFilePath == "" {
+		// No configuration file found (neither explicit, nor env, nor default)
+		// Return a basic default config. Commands requiring specific backend paths
+		// will need to handle this (e.g., GetActiveBackend() will return nil or error).
+		// fmt.Println("No config file specified or found by default. Using in-memory defaults.")
+		cfg := NewDefaultConfig()
+		globalConfig = cfg
+		return cfg, nil // Not an error to not find a config, some commands might not need one.
+	}
+
+	slog.Debug("Attempting to load configuration from", "path", configFilePath)
 	data, err := os.ReadFile(configFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %w", configFilePath, err)
@@ -139,6 +163,28 @@ func Get() *Config {
 		panic("config not loaded; Load() must be called before Get()")
 	}
 	return globalConfig
+}
+
+// GetActiveStorageBackend returns the StorageConfig for the DefaultBackend.
+// It returns an error if the DefaultBackend is not defined or not found in StorageBackends.
+func GetActiveStorageBackend(cfg *Config) (*StorageConfig, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("configuration is nil")
+	}
+	if cfg.DefaultBackend == "" {
+		// It's okay to not have a default backend specified. Some commands might not need it.
+		// The caller should handle this case if a backend is strictly required.
+		// slog.Debug("No DefaultBackend specified in configuration.")
+		return nil, fmt.Errorf("notice: No DefaultBackend specified in configuration. Some commands may not function")
+	}
+	backendConfig, ok := cfg.StorageBackends[cfg.DefaultBackend]
+	if !ok {
+		return nil, fmt.Errorf("default backend '%s' not found in storage_backends configuration", cfg.DefaultBackend)
+	}
+	if backendConfig == nil { // Should not happen if key exists, but good practice
+		return nil, fmt.Errorf("configuration for default backend '%s' is nil", cfg.DefaultBackend)
+	}
+	return backendConfig, nil
 }
 
 // Example gydnc.conf content:
