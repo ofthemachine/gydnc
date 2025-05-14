@@ -1,0 +1,35 @@
+exit_code: 0
+stdout:
+  # Check for messages from 'init' first
+  - match_type: SUBSTRING
+    content: "Created guidance store directory: .gydnc_store"
+  - match_type: SUBSTRING
+    content: "Created TAG_ONTOLOGY.md: .gydnc_store/TAG_ONTOLOGY.md"
+  - match_type: SUBSTRING
+    content: "Created configuration file: gydnc.conf"
+  - match_type: SUBSTRING
+    content: "gydnc initialized successfully in ."
+  # Then check for messages from 'list' (assuming an empty store initially)
+  - match_type: SUBSTRING # Using SUBSTRING because the exact backend name might be in the output
+    content: "No guidance aliases found matching the criteria."
+stderr:
+  - match_type: EXACT # Expect empty stderr for successful operations
+    content: ""
+filesystem:
+  - path: "gydnc.conf"
+    exists: true
+    match_type: REGEX # Check that path in config points to .gydnc_store, allowing for full path variation
+    content: |-
+      default_backend: defaultLocal
+      storage_backends:
+        defaultLocal:
+          type: localfs
+          localfs:
+            path: .*/.gydnc_store # Regex to match absolute path ending with .gydnc_store
+  - path: ".gydnc_store"
+    exists: true
+    is_dir: true
+  - path: ".gydnc_store/TAG_ONTOLOGY.md"
+    exists: true
+    match_type: SUBSTRING
+    content: "# Tag Ontology"

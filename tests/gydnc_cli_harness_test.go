@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	baseTestDir       = "testdata/cli"
-	sharedFixturesDir = "testdata/shared_fixtures"
+	baseTestDir       = "cmd_samples"
+	sharedFixturesDir = "shared_fixtures"
 	gydncTestBinary   = "./test_gydnc" // Relative to temp test execution dir
 )
 
@@ -243,7 +243,7 @@ func arrangeTestData(t *testing.T, tempDir, arrangeFile string) error {
 			// Path to shared_fixtures is relative to project root, so construct it carefully
 			// Assuming test runs from project root for `go test ./...`
 			// projectRootSharedFixtures := sharedFixturesDir
-			sharedFixturePath := filepath.Join(sharedFixturesDir, step.Source) // Corrected: sharedFixturesDir is already project-root-relative
+			sharedFixturePath := filepath.Join(sharedFixturesDir, step.Source) // Corrected: sharedFixturesDir is now relative to test file
 			destinationPath := filepath.Join(tempDir, step.Destination)
 
 			if err := os.MkdirAll(filepath.Dir(destinationPath), 0755); err != nil {
