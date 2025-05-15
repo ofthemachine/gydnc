@@ -1,0 +1,11 @@
+exit_code: 0
+stdout:
+  - match_type: YAML
+    content: |
+      title: Test Alpha Title
+      description: Description for Alpha.
+      tags:
+          - go
+          - test
+          - alpha
+stderr: [] # Expect no stderr

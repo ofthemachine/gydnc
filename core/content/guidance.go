@@ -102,3 +102,14 @@ func (gc *GuidanceContent) ToFileContent() ([]byte, error) {
 
 	return buffer.Bytes(), nil
 }
+
+// MarshalFrontmatter serializes only the frontmatter-related fields (Title, Description, Tags)
+// of the GuidanceContent to a YAML byte slice.
+func (gc *GuidanceContent) MarshalFrontmatter() ([]byte, error) {
+	fm := frontmatterYAML{ // Uses the internal, unexported struct
+		Title:       gc.Title,
+		Description: gc.Description,
+		Tags:        gc.Tags,
+	}
+	return yaml.Marshal(&fm)
+}

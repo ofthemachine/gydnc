@@ -1,0 +1,15 @@
+exit_code: 0
+stdout:
+  - match_type: JSON
+    content: |
+      {
+        "id": "test-alpha",
+        "title": "Test Alpha Title",
+        "description": "Description for Alpha.",
+        "tags": [
+          "go",
+          "test",
+          "alpha"
+        ]
+      }
+stderr: [] # Expect no stderr

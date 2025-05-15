@@ -4,10 +4,12 @@ package main_test // Changed from gydnc_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -408,19 +410,28 @@ func compareStreamOutput(matchType, expectedContent, actualOutput, streamName st
 		matchType = "EXACT"
 	}
 
-	normActual := strings.TrimSpace(actualOutput)
-	normExpected := strings.TrimSpace(expectedContent)
+	// For EXACT, SUBSTRING, REGEX, trimming is fine.
+	// For JSON and YAML, we generally want to compare the raw string.
+	// However, if the harness always provides trimmed actualOutput,
+	// and expectedContent in YAML is also effectively trimmed by the parser,
+	// this might be okay. Let's be mindful.
+	// For now, keep trim for non-JSON/YAML, and use raw for JSON/YAML.
 
 	switch strings.ToUpper(matchType) {
 	case "EXACT":
+		normActual := strings.TrimSpace(actualOutput)
+		normExpected := strings.TrimSpace(expectedContent)
 		if normActual != normExpected {
 			return fmt.Errorf("%s exact match failed.\nExpected:\n```\n%s\n```\nGot:\n```\n%s\n```", streamName, normExpected, normActual)
 		}
 	case "SUBSTRING":
+		// Substring doesn't usually need trimming of expected content.
+		// actualOutput might be trimmed if it makes sense generally.
 		if !strings.Contains(actualOutput, expectedContent) {
 			return fmt.Errorf("%s substring match failed. Expected to find:\n```\n%s\n```\nIn output:\n```\n%s\n```", streamName, expectedContent, actualOutput)
 		}
 	case "REGEX":
+		// Regex operates on the raw string.
 		matched, err := regexp.MatchString(expectedContent, actualOutput)
 		if err != nil {
 			return fmt.Errorf("invalid regex in %s assertion: %w", streamName, err)
@@ -428,11 +439,52 @@ func compareStreamOutput(matchType, expectedContent, actualOutput, streamName st
 		if !matched {
 			return fmt.Errorf("%s regex match failed. Pattern:\n```\n%s\n```\nOutput:\n```\n%s\n```", streamName, expectedContent, actualOutput)
 		}
-	// TODO: Implement CONTAINS_LINES, JSON_EQUALS, JSON_CONTAINS_SUBSET
+	case "JSON":
+		var expectedJSON, actualJSON interface{}
+
+		// Unmarshal expected JSON
+		if err := json.Unmarshal([]byte(expectedContent), &expectedJSON); err != nil {
+			return fmt.Errorf("%s: failed to unmarshal expected JSON content: %w\nExpected JSON string:\n```\n%s\n```", streamName, err, expectedContent)
+		}
+
+		// Unmarshal actual JSON output
+		if err := json.Unmarshal([]byte(actualOutput), &actualJSON); err != nil {
+			// Try to trim whitespace and retry for actual output, as it might have leading/trailing newlines from CLI output
+			if errRetry := json.Unmarshal([]byte(strings.TrimSpace(actualOutput)), &actualJSON); errRetry != nil {
+				return fmt.Errorf("%s: failed to unmarshal actual output as JSON: %w (original error: %s)\nActual output string:\n```\n%s\n```", streamName, errRetry, err.Error(), actualOutput)
+			}
+		}
+
+		if !reflect.DeepEqual(expectedJSON, actualJSON) {
+			// For better diffs, marshal them back to string (pretty printed)
+			prettyExpected, _ := json.MarshalIndent(expectedJSON, "", "  ")
+			prettyActual, _ := json.MarshalIndent(actualJSON, "", "  ")
+			return fmt.Errorf("%s JSON content mismatch.\nExpected:\n```json\n%s\n```\nGot:\n```json\n%s\n```\n(Raw Expected:\n%s\nRaw Actual:\n%s)", streamName, string(prettyExpected), string(prettyActual), expectedContent, actualOutput)
+		}
+	case "YAML":
+		var expectedYAML, actualYAML interface{}
+
+		// Unmarshal expected YAML
+		if err := yaml.Unmarshal([]byte(expectedContent), &expectedYAML); err != nil {
+			return fmt.Errorf("%s: failed to unmarshal expected YAML content: %w\nExpected YAML string:\n```\n%s\n```", streamName, err, expectedContent)
+		}
+
+		// Unmarshal actual YAML output
+		if err := yaml.Unmarshal([]byte(actualOutput), &actualYAML); err != nil {
+			// Try to trim whitespace and retry for actual output
+			if errRetry := yaml.Unmarshal([]byte(strings.TrimSpace(actualOutput)), &actualYAML); errRetry != nil {
+				return fmt.Errorf("%s: failed to unmarshal actual output as YAML: %w (original error: %s)\nActual output string:\n```\n%s\n```", streamName, errRetry, err.Error(), actualOutput)
+			}
+		}
+
+		if !reflect.DeepEqual(expectedYAML, actualYAML) {
+			// For better diffs, marshal them back to string (pretty printed if possible, though yaml.Marshal is standard)
+			prettyExpected, _ := yaml.Marshal(expectedYAML)
+			prettyActual, _ := yaml.Marshal(actualYAML)
+			return fmt.Errorf("%s YAML content mismatch.\nExpected:\n```yaml\n%s\n```\nGot:\n```yaml\n%s\n```\n(Raw Expected:\n%s\nRaw Actual:\n%s)", streamName, string(prettyExpected), string(prettyActual), expectedContent, actualOutput)
+		}
 	default:
-		// Fallback to EXACT for any unknown match types if only content is provided (like old .expect files)
-		// Or, more strictly, error out on unknown match type
-		return fmt.Errorf("unknown match_type '%s' for %s assertion. Supported: EXACT, SUBSTRING, REGEX", matchType, streamName)
+		return fmt.Errorf("unknown match_type '%s' for %s assertion. Supported: EXACT, SUBSTRING, REGEX, JSON, YAML", matchType, streamName)
 	}
 	return nil
 }

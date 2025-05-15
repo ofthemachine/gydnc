@@ -1,0 +1,11 @@
+exit_code: 0
+stdout:
+  - match_type: EXACT # Expect only the body content
+    content: |
+      # Test Alpha Title
+
+      Guidance content for 'Test Alpha Title' goes here.
+      This is the body content
+      for Test Alpha.
+      It has multiple lines.
+stderr: [] # Expect no stderr

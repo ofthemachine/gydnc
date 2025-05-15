@@ -1,0 +1,17 @@
+exit_code: 0
+stdout:
+  - match_type: REGEX # Raw output includes the frontmatter and body as is
+    content: |
+      ---
+      id: [a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}
+      title: Test Alpha Title
+      description: Description for Alpha.
+      tags:
+          - go
+          - test
+          - alpha
+      ---
+      # Test Alpha Title
+
+      Guidance content for 'Test Alpha Title' goes here.
+stderr: [] # Expect no stderr
