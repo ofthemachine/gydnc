@@ -1,0 +1,5 @@
+# no default_backend specified
+storage_backends:
+  sole_backend:
+    type: "localfs"
+    localfs: { path: ".the_only_store" }

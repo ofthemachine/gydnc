@@ -1,0 +1,5 @@
+default_backend: "s3_test"
+storage_backends:
+  s3_test:
+    type: "s3" # This type is not supported by the create command's current switch statement
+    # localfs: {} # No localfs settings, to ensure it hits the type switch correctly

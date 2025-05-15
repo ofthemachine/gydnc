@@ -1,0 +1,8 @@
+exit_code: 1
+stdout: []
+stderr:
+  - match_type: SUBSTRING
+    content: "specified backend 'non_existent' not found in configuration"
+filesystem:
+  - path: ".store_primary/multi_backend/non_existent_be_test.g6e"
+    exists: false

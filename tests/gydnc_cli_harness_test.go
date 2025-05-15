@@ -129,6 +129,19 @@ func TestCLI(t *testing.T) {
 			tempDir := t.TempDir()
 			t.Logf("Test %s running in tempDir: %s", tc.Name, tempDir)
 
+			// Copy config.yml if it exists for the test case
+			srcConfigPath := filepath.Join(tc.Path, "config.yml")
+			destConfigPath := filepath.Join(tempDir, "config.yml")
+			if _, err := os.Stat(srcConfigPath); err == nil {
+				if err := copyFile(srcConfigPath, destConfigPath); err != nil {
+					t.Fatalf("Failed to copy test-specific config.yml from %s to %s: %v", srcConfigPath, destConfigPath, err)
+				}
+				t.Logf("Copied test-specific config.yml to %s", destConfigPath)
+			} else if !os.IsNotExist(err) {
+				// Log error if stat failed for reasons other than not existing
+				t.Logf("Warning: could not stat test-specific config.yml at %s: %v", srcConfigPath, err)
+			}
+
 			// 1. ARRANGE Phase (parse arrange.yml and execute steps)
 			if err := arrangeTestData(t, tempDir, tc.ArrangeFile); err != nil {
 				t.Fatalf("Arrange phase failed: %v", err)
@@ -169,62 +182,86 @@ func TestCLI(t *testing.T) {
 func discoverTestCases(baseDir string) ([]CLITestCase, error) {
 	var cases []CLITestCase
 
-	// Walk the baseDir to find test case directories.
-	// A test case directory is expected to be a grandchild of baseDir,
-	// e.g., baseDir/suiteName/testCaseName/
-	// and must contain act.sh and assert.yml.
-
-	suiteEntries, err := os.ReadDir(baseDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return cases, nil // No suites found, no tests
-		}
-		return nil, fmt.Errorf("reading base test directory %s: %w", baseDir, err)
-	}
-
-	for _, suiteEntry := range suiteEntries {
-		if !suiteEntry.IsDir() {
-			continue
-		}
-		suiteName := suiteEntry.Name()
-		suitePath := filepath.Join(baseDir, suiteName)
-
-		testCaseEntries, err := os.ReadDir(suitePath)
+	err := filepath.WalkDir(baseDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			// Log warning but continue, one suite being unreadable shouldn't stop others
-			fmt.Fprintf(os.Stderr, "Warning: could not read test suite directory %s: %v\n", suitePath, err)
-			continue
+			// Prevent further walking if there's an error accessing a path.
+			// This could be a permissions issue or a broken symlink.
+			// Log it and decide if it should halt everything or just skip this path.
+			// For now, let's print a warning and continue, but not explore this path further.
+			fmt.Fprintf(os.Stderr, "Warning: Error accessing path %s: %v. Skipping.\\n", path, err)
+			if d != nil && d.IsDir() {
+				return filepath.SkipDir // Skip processing this directory further
+			}
+			return nil // Skip this entry
 		}
 
-		for _, testCaseEntry := range testCaseEntries {
-			if !testCaseEntry.IsDir() {
-				continue
-			}
-			testCaseName := testCaseEntry.Name()
-			fullTestCaseName := filepath.Join(suiteName, testCaseName) // e.g., "core/01_list_fails_no_config"
-			testCasePath := filepath.Join(suitePath, testCaseName)
+		if d.IsDir() {
+			// Check if this directory contains act.sh and assert.yml
+			actScriptPath := filepath.Join(path, "act.sh")
+			assertFilePath := filepath.Join(path, "assert.yml")
 
-			actScriptPath := filepath.Join(testCasePath, "act.sh")
-			assertFilePath := filepath.Join(testCasePath, "assert.yml")
-
-			if _, err := os.Stat(actScriptPath); os.IsNotExist(err) {
-				fmt.Fprintf(os.Stderr, "Warning: Skipping test case '%s': missing act.sh in %s\n", fullTestCaseName, testCasePath)
-				continue
-			}
-			if _, err := os.Stat(assertFilePath); os.IsNotExist(err) {
-				fmt.Fprintf(os.Stderr, "Warning: Skipping test case '%s': missing assert.yml in %s\n", fullTestCaseName, testCasePath)
-				continue
+			actScriptExists := false
+			if _, err := os.Stat(actScriptPath); err == nil {
+				actScriptExists = true
+			} else if !os.IsNotExist(err) {
+				// Log other errors (like permission issues) for statting act.sh
+				fmt.Fprintf(os.Stderr, "Warning: Error checking act.sh at %s: %v\\n", actScriptPath, err)
 			}
 
-			cases = append(cases, CLITestCase{
-				Name:        fullTestCaseName, // Use combined name for t.Run
-				Path:        testCasePath,
-				ArrangeFile: filepath.Join(testCasePath, "arrange.yml"),
-				ActScript:   actScriptPath,
-				AssertFile:  assertFilePath,
-			})
+			assertFileExists := false
+			if _, err := os.Stat(assertFilePath); err == nil {
+				assertFileExists = true
+			} else if !os.IsNotExist(err) {
+				// Log other errors for statting assert.yml
+				fmt.Fprintf(os.Stderr, "Warning: Error checking assert.yml at %s: %v\\n", assertFilePath, err)
+			}
+
+			if actScriptExists && assertFileExists {
+				// This directory is a test case.
+				// The "Name" of the test case should be relative to the baseDir
+				// to give it a unique and descriptive name, e.g., "create/01_basic_creation"
+				relativeTestCasePath, relErr := filepath.Rel(baseDir, path)
+				if relErr != nil {
+					// This should ideally not happen if path is under baseDir.
+					// Fallback to using the full path or just the directory name.
+					fmt.Fprintf(os.Stderr, "Warning: Could not make path %s relative to %s: %v. Using directory name as fallback.\\n", path, baseDir, relErr)
+					relativeTestCasePath = filepath.Base(path)
+				}
+
+				// The "Path" field in CLITestCase is the absolute or full path to the test case dir.
+				// The arrange.yml is optional. Check for it.
+				arrangeFilePath := filepath.Join(path, "arrange.yml")
+				if _, err := os.Stat(arrangeFilePath); os.IsNotExist(err) {
+					arrangeFilePath = "" // Set to empty if not found
+				} else if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Error checking arrange.yml at %s: %v\\n", arrangeFilePath, err)
+					arrangeFilePath = "" // Treat as not found on error too
+				}
+
+				tc := CLITestCase{
+					Name:        relativeTestCasePath, // Use the relative path for the test name
+					Path:        path,                 // Full path to the test case directory
+					ArrangeFile: arrangeFilePath,
+					ActScript:   actScriptPath,
+					AssertFile:  assertFilePath,
+				}
+				cases = append(cases, tc)
+				// slog.Debug("Discovered test case", "name", tc.Name, "path", tc.Path)
+				return filepath.SkipDir // Don't look for test cases in subdirs of this test case
+			}
 		}
+		return nil // Continue walking
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("error walking test case directory %s: %w", baseDir, err)
 	}
+
+	// Sort cases by name for consistent test execution order (optional, but good for reproducibility)
+	// sort.Slice(cases, func(i, j int) bool {
+	// 	return cases[i].Name < cases[j].Name
+	// })
+
 	return cases, nil
 }
 

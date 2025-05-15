@@ -1,0 +1,17 @@
+exit_code: 0
+stdout:
+  - match_type: SUBSTRING
+    content: "Created guidance file: .the_only_store/multi_backend/single_be_test_entity.g6e"
+stderr: []
+filesystem:
+  - path: ".the_only_store/multi_backend/single_be_test_entity.g6e"
+    exists: true
+    match_type: REGEX
+    content: |
+      ---
+      id: [a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}
+      title: Single Backend Test
+      ---
+      # Single Backend Test
+
+      Guidance content for 'Single Backend Test' goes here.

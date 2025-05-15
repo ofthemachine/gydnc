@@ -19,6 +19,7 @@ var (
 	createTitle       string
 	createDescription string
 	createTags        []string
+	createBackend     string // Added for backend selection
 )
 
 // createCmd represents the create command
@@ -40,17 +41,68 @@ All necessary parent directories will be created.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		aliasOrPath := args[0]
-		// slog.Debug("Starting 'create' command", "aliasOrPath", aliasOrPath, "title", createTitle, "description", createDescription, "tags", createTags)
+		// slog.Debug("Starting 'create' command", "aliasOrPath", aliasOrPath, "title", createTitle, "description", createDescription, "tags", createTags, "backend", createBackend)
 
 		cfg := config.Get() // Assumes config is loaded by rootPersistentPreRun
-		activeBackend, err := config.GetActiveStorageBackend(cfg)
-		if err != nil {
-			return fmt.Errorf("could not get active storage backend: %w", err)
+
+		var targetBackendName string
+		var chosenBackendConfig *config.StorageConfig
+
+		if createBackend != "" {
+			targetBackendName = createBackend
+			backendConfig, ok := cfg.StorageBackends[targetBackendName]
+			if !ok {
+				return fmt.Errorf("specified backend '%s' not found in configuration", targetBackendName)
+			}
+			if backendConfig == nil {
+				return fmt.Errorf("configuration for specified backend '%s' is nil (should not happen if key exists)", targetBackendName)
+			}
+			chosenBackendConfig = backendConfig
+		} else if cfg.DefaultBackend != "" {
+			targetBackendName = cfg.DefaultBackend
+			backendConfig, ok := cfg.StorageBackends[targetBackendName]
+			if !ok {
+				return fmt.Errorf("default backend '%s' (from config) not found in storage_backends configuration", targetBackendName)
+			}
+			if backendConfig == nil {
+				return fmt.Errorf("configuration for default backend '%s' is nil (should not happen if key exists)", targetBackendName)
+			}
+			chosenBackendConfig = backendConfig
+		} else {
+			if len(cfg.StorageBackends) == 0 {
+				return fmt.Errorf("no storage backends configured")
+			}
+			if len(cfg.StorageBackends) == 1 {
+				// If only one backend, use it by default
+				for name, backendCfg := range cfg.StorageBackends {
+					targetBackendName = name
+					chosenBackendConfig = backendCfg
+					// slog.Debug("Only one backend configured, using it by default", "backendName", targetBackendName)
+					break
+				}
+			} else {
+				// Multiple backends, no default, no explicit choice
+				return fmt.Errorf("multiple backends configured and no default is set. Please specify a backend using --backend or set default_backend in config")
+			}
 		}
-		if activeBackend.LocalFS == nil {
-			return fmt.Errorf("active backend '%s' is not a localfs backend or not configured", cfg.DefaultBackend)
+
+		if chosenBackendConfig == nil { // Should be caught by earlier checks, but as a safeguard
+			return fmt.Errorf("failed to determine a target storage backend")
 		}
-		storeBasePath := activeBackend.LocalFS.Path
+
+		var storeBasePath string
+		switch chosenBackendConfig.Type {
+		case "localfs":
+			if chosenBackendConfig.LocalFS == nil {
+				return fmt.Errorf("backend '%s' is type 'localfs' but has no localfs settings configured", targetBackendName)
+			}
+			if chosenBackendConfig.LocalFS.Path == "" {
+				return fmt.Errorf("localfs backend '%s' is missing the 'path' setting", targetBackendName)
+			}
+			storeBasePath = chosenBackendConfig.LocalFS.Path
+		default:
+			return fmt.Errorf("backend '%s' has an unsupported type '%s' for the create command", targetBackendName, chosenBackendConfig.Type)
+		}
 
 		// Determine target file path
 		targetFileName := aliasOrPath
@@ -147,6 +199,7 @@ func init() {
 	createCmd.Flags().StringVarP(&createTitle, "title", "t", "", "Title for the new guidance entity")
 	createCmd.Flags().StringVarP(&createDescription, "description", "d", "", "Description for the new guidance entity")
 	createCmd.Flags().StringSliceVarP(&createTags, "tags", "g", []string{}, "Comma-separated tags (e.g., tag1,category:value2)")
+	createCmd.Flags().StringVar(&createBackend, "backend", "", "Name of the storage backend to use (overrides default_backend from config)") // Added flag
 	// Example of how to use a StringArray flag if preferred over StringSlice for comma separation handling by Cobra
 	// createCmd.Flags().StringArrayVarP(&createTags, "tags", "g", []string{}, "Tags for the new guidance (can be specified multiple times)")
 }

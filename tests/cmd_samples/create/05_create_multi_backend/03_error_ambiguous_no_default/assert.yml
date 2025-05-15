@@ -1,0 +1,10 @@
+exit_code: 1 # Expecting a non-zero exit code for failure
+stdout: [] # Expect no stdout on error
+stderr:
+  - match_type: SUBSTRING
+    content: "multiple backends configured and no default is set. Please specify a backend using --backend or set default_backend in config"
+filesystem: # Ensure no file was created accidentally
+  - path: ".store_primary/multi_backend/ambiguous_test_entity.g6e"
+    exists: false
+  - path: ".store_secondary/multi_backend/ambiguous_test_entity.g6e"
+    exists: false

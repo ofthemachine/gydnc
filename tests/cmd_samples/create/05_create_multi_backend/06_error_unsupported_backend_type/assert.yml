@@ -1,0 +1,5 @@
+exit_code: 1
+stdout: []
+stderr:
+  - match_type: SUBSTRING
+    content: "backend 's3_test' has an unsupported type 's3' for the create command"

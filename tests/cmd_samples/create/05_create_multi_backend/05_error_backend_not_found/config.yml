@@ -1,0 +1,5 @@
+default_backend: "primary"
+storage_backends:
+  primary:
+    type: "localfs"
+    localfs: { path: ".store_primary" }

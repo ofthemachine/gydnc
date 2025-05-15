@@ -1,0 +1,8 @@
+# no default_backend specified
+storage_backends:
+  primary:
+    type: "localfs"
+    localfs: { path: ".store_primary" }
+  secondary:
+    type: "localfs"
+    localfs: { path: ".store_secondary" }
