@@ -4,7 +4,7 @@ stdout:
     content: |
       [
         {
-          "id": "test-alpha",
+          "id": "9df93c4001158e6103c983c201b0d611da96ffb9f125a617bef13030881b9ff2",
           "frontmatter": {
             "title": "Test Alpha Title",
             "description": "Alpha Desc",
@@ -16,7 +16,7 @@ stdout:
           "body": "# Test Alpha Title\n\nGuidance content for 'Test Alpha Title' goes here.\nBody for Alpha.\n"
         },
         {
-          "id": "test-beta",
+          "id": "4699edae22f6e99ec7fb87cf14c44f0d3610334dc77ecdc5eee8a8824fe3ee93",
           "frontmatter": {
             "title": "Test Beta Title",
             "description": "Beta Desc",

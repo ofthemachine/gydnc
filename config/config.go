@@ -13,6 +13,7 @@ import (
 // GlobalConfig holds the application-wide configuration.
 // It is populated by Load and accessed via Get.
 var globalConfig *Config
+var loadedConfigActualPath string // Store the actual path from which config was loaded
 
 // LocalFSConfig defines settings specific to the local filesystem backend.
 // For the MVP, Git integration settings are omitted and considered a future enhancement.
@@ -80,6 +81,8 @@ func Load(cliConfigPath string) (*Config, error) {
 		}
 		// Future: could implement upward search from CWD for .gydnc directory here
 	}
+
+	loadedConfigActualPath = configFilePath // Store the determined path
 
 	if configFilePath == "" {
 		// No configuration file found (neither explicit, nor env, nor default)
@@ -163,6 +166,12 @@ func Get() *Config {
 		panic("config not loaded; Load() must be called before Get()")
 	}
 	return globalConfig
+}
+
+// GetLoadedConfigActualPath returns the actual file path from which the global configuration was loaded.
+// Returns an empty string if the configuration was not loaded from a file (e.g., using defaults).
+func GetLoadedConfigActualPath() string {
+	return loadedConfigActualPath
 }
 
 // GetActiveStorageBackend returns the StorageConfig for the DefaultBackend.

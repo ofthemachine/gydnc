@@ -5,16 +5,13 @@ stdout:
   - match_type: SUBSTRING # Message from create
     content: "Created guidance file:"
   - match_type: SUBSTRING # Actual file name part, now directly in .gydnc/category/
-    content: "/.gydnc/category/my-sub-guidance.g6e"
+    content: ".gydnc/category/my-sub-guidance.g6e"
 stderr: # Allow INFO logs from init and potentially create
   - match_type: SUBSTRING
     content: ""
 filesystem:
   - path: ".gydnc/category/my-sub-guidance.g6e"
     exists: true
-  - path: ".gydnc/category/my-sub-guidance.g6e"
-    match_type: SUBSTRING
-    content: "id: "
   - path: ".gydnc/category/my-sub-guidance.g6e"
     match_type: SUBSTRING
     content: "title: my-sub-guidance" # Title is derived from the last part of the alias

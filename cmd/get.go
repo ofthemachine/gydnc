@@ -51,7 +51,7 @@ You can specify the output format using the --output flag:
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		idsToGet := args
-		backend := GetActiveBackend()
+		backend, _ := GetActiveBackend()
 		if backend == nil {
 			slog.Error("Active backend not initialized")
 			return fmt.Errorf("active backend not initialized; run 'gydnc init' or check config")
@@ -127,8 +127,14 @@ You can specify the output format using the --output flag:
 			switch outputFormatGet {
 			case "structured":
 				// parseErr already handled above for this case
+				contentID, idErr := parsedContent.GetContentID()
+				if idErr != nil {
+					slog.Error("Failed to compute content ID", "source_id_arg", id, "error", idErr)
+					// Decide how to handle this - perhaps use a placeholder or the original id_arg?
+					contentID = "ERROR_COMPUTING_ID_" + id // Placeholder
+				}
 				structuredData := StructuredGuidanceOutput{
-					ID: id,
+					ID: contentID,
 					Frontmatter: FrontmatterData{
 						Title:       parsedContent.Title,
 						Description: parsedContent.Description,
@@ -149,8 +155,13 @@ You can specify the output format using the --output flag:
 				}
 			case "json-frontmatter":
 				// parseErr already handled above for this case
+				contentID, idErr := parsedContent.GetContentID()
+				if idErr != nil {
+					slog.Error("Failed to compute content ID for json-frontmatter", "source_id_arg", id, "error", idErr)
+					contentID = "ERROR_COMPUTING_ID_" + id // Placeholder
+				}
 				jsonData := JsonFrontmatterOnlyOutput{
-					ID:          id,
+					ID:          contentID,
 					Title:       parsedContent.Title,
 					Description: parsedContent.Description,
 					Tags:        parsedContent.Tags,

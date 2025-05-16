@@ -11,11 +11,12 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 
-	// Consider adding YAML parsing library, e.g., "gopkg.in/yaml.v3"
-	// Consider adding JSON comparison library, e.g., "github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
 
@@ -69,19 +70,58 @@ type ArrangeStep struct {
 var ( // package-level variable to track build status
 	gydncBuildErr error
 	gydncBuilt    bool
+	projectRoot   string // Cached project root
 )
+
+// findProjectRoot searches upwards from an initial path for a marker file (e.g., go.mod)
+// to determine the project root. Returns the project root path or an error.
+func findProjectRoot(startPath string, markerFile string) (string, error) {
+	currentPath, err := filepath.Abs(startPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for %s: %w", startPath, err)
+	}
+
+	for {
+		potentialMarkerPath := filepath.Join(currentPath, markerFile)
+		if _, err := os.Stat(potentialMarkerPath); err == nil {
+			return currentPath, nil // Found the marker file, this is the root
+		}
+
+		parentPath := filepath.Dir(currentPath)
+		if parentPath == currentPath { // Reached the filesystem root
+			return "", fmt.Errorf("marker file '%s' not found by walking up from %s", markerFile, startPath)
+		}
+		currentPath = parentPath
+	}
+}
 
 func buildGydncOnce(t *testing.T) string {
 	t.Helper()
+
+	if projectRoot == "" { // Find project root once
+		// Get current file's directory to start search
+		_, currentFile, _, ok := runtime.Caller(0)
+		if !ok {
+			t.Fatalf("Failed to get current file path using runtime.Caller")
+		}
+		var err error
+		projectRoot, err = findProjectRoot(filepath.Dir(currentFile), "go.mod")
+		if err != nil {
+			t.Fatalf("Failed to find project root: %v", err)
+		}
+		t.Logf("Project root identified as: %s", projectRoot)
+	}
+
 	if gydncBuilt {
 		// If already built, assume the caller will copy it.
-		// Return the expected path *relative to the project root*.
-		return "./gydnc"
+		// Return the path *relative to the project root*.
+		// return "./gydnc" // This was relative to where make was run
+		return filepath.Join(projectRoot, "gydnc")
 	}
 
 	// Determine project root (one level up from the current file's dir)
 	// This assumes the test file is in a direct subdirectory of the project root (e.g., ./tests)
-	projectRoot := ".."
+	// projectRoot := ".." // Old way
 
 	cmd := exec.Command("make", "build")
 	cmd.Dir = projectRoot // Set the working directory for make
@@ -96,11 +136,12 @@ func buildGydncOnce(t *testing.T) string {
 	// If copyFile expects a path relative to project root, then filepath.Join(projectRoot, "gydnc") is correct.
 	// The current copyFile in the harness uses the returned path directly, assuming it's accessible.
 	// Let's return an absolute path or a path clearly relative to project root for clarity.
-	absProjectRoot, err := filepath.Abs(projectRoot)
-	if err != nil {
-		t.Fatalf("Failed to get absolute path for project root %s: %v", projectRoot, err)
-	}
-	return filepath.Join(absProjectRoot, "gydnc") // Path for the built binary
+	// absProjectRoot, err := filepath.Abs(projectRoot)
+	// if err != nil {
+	// 	t.Fatalf("Failed to get absolute path for project root %s: %v", projectRoot, err)
+	// }
+	// return filepath.Join(absProjectRoot, "gydnc") // Path for the built binary
+	return filepath.Join(projectRoot, "gydnc") // Path for the built binary, relative to FS root
 }
 
 func TestCLI(t *testing.T) {
@@ -124,7 +165,18 @@ func TestCLI(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc // Capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			t.Parallel() // Run test cases in parallel
+			t.Parallel()            // Run test cases in parallel
+			startTime := time.Now() // Record start time
+
+			// Deferred function to print the summary marker line
+			defer func() {
+				statusStr := "PASS"
+				if t.Failed() {
+					statusStr = "FAIL"
+				}
+				duration := time.Since(startTime)
+				fmt.Printf("TEST_SUMMARY_MARKER: %s - %s (%.2fs)\n", tc.Name, statusStr, duration.Seconds())
+			}()
 
 			tempDir := t.TempDir()
 			t.Logf("Test %s running in tempDir: %s", tc.Name, tempDir)
@@ -143,7 +195,7 @@ func TestCLI(t *testing.T) {
 			}
 
 			// 1. ARRANGE Phase (parse arrange.yml and execute steps)
-			if err := arrangeTestData(t, tempDir, tc.ArrangeFile); err != nil {
+			if err := arrangeTestData(t, tempDir, tc.ArrangeFile, tc.Path); err != nil {
 				t.Fatalf("Arrange phase failed: %v", err)
 			}
 
@@ -188,7 +240,7 @@ func discoverTestCases(baseDir string) ([]CLITestCase, error) {
 			// This could be a permissions issue or a broken symlink.
 			// Log it and decide if it should halt everything or just skip this path.
 			// For now, let's print a warning and continue, but not explore this path further.
-			fmt.Fprintf(os.Stderr, "Warning: Error accessing path %s: %v. Skipping.\\n", path, err)
+			fmt.Fprintf(os.Stderr, "Warning: Error accessing path %s during test discovery: %v. Skipping.\n", path, err)
 			if d != nil && d.IsDir() {
 				return filepath.SkipDir // Skip processing this directory further
 			}
@@ -205,7 +257,7 @@ func discoverTestCases(baseDir string) ([]CLITestCase, error) {
 				actScriptExists = true
 			} else if !os.IsNotExist(err) {
 				// Log other errors (like permission issues) for statting act.sh
-				fmt.Fprintf(os.Stderr, "Warning: Error checking act.sh at %s: %v\\n", actScriptPath, err)
+				logDiscoveryWarning("Error checking act.sh at %s: %v", actScriptPath, err)
 			}
 
 			assertFileExists := false
@@ -213,7 +265,7 @@ func discoverTestCases(baseDir string) ([]CLITestCase, error) {
 				assertFileExists = true
 			} else if !os.IsNotExist(err) {
 				// Log other errors for statting assert.yml
-				fmt.Fprintf(os.Stderr, "Warning: Error checking assert.yml at %s: %v\\n", assertFilePath, err)
+				logDiscoveryWarning("Error checking assert.yml at %s: %v", assertFilePath, err)
 			}
 
 			if actScriptExists && assertFileExists {
@@ -224,7 +276,7 @@ func discoverTestCases(baseDir string) ([]CLITestCase, error) {
 				if relErr != nil {
 					// This should ideally not happen if path is under baseDir.
 					// Fallback to using the full path or just the directory name.
-					fmt.Fprintf(os.Stderr, "Warning: Could not make path %s relative to %s: %v. Using directory name as fallback.\\n", path, baseDir, relErr)
+					logDiscoveryWarning("Could not make path %s relative to %s: %v. Using directory name as fallback.", path, baseDir, relErr)
 					relativeTestCasePath = filepath.Base(path)
 				}
 
@@ -234,7 +286,7 @@ func discoverTestCases(baseDir string) ([]CLITestCase, error) {
 				if _, err := os.Stat(arrangeFilePath); os.IsNotExist(err) {
 					arrangeFilePath = "" // Set to empty if not found
 				} else if err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: Error checking arrange.yml at %s: %v\\n", arrangeFilePath, err)
+					logDiscoveryWarning("Error checking arrange.yml at %s: %v", arrangeFilePath, err)
 					arrangeFilePath = "" // Treat as not found on error too
 				}
 
@@ -258,14 +310,14 @@ func discoverTestCases(baseDir string) ([]CLITestCase, error) {
 	}
 
 	// Sort cases by name for consistent test execution order (optional, but good for reproducibility)
-	// sort.Slice(cases, func(i, j int) bool {
-	// 	return cases[i].Name < cases[j].Name
-	// })
+	sort.Slice(cases, func(i, j int) bool {
+		return cases[i].Name < cases[j].Name
+	})
 
 	return cases, nil
 }
 
-func arrangeTestData(t *testing.T, tempDir, arrangeFile string) error {
+func arrangeTestData(t *testing.T, tempDir, arrangeFile, testCasePath string) error {
 	t.Helper()
 	if _, err := os.Stat(arrangeFile); os.IsNotExist(err) {
 		t.Log("arrange.yml not found, skipping arrange phase.")
@@ -315,7 +367,16 @@ func arrangeTestData(t *testing.T, tempDir, arrangeFile string) error {
 			// Path to shared_fixtures is relative to project root, so construct it carefully
 			// Assuming test runs from project root for `go test ./...`
 			// projectRootSharedFixtures := sharedFixturesDir
-			sharedFixturePath := filepath.Join(sharedFixturesDir, step.Source) // Corrected: sharedFixturesDir is now relative to test file
+			// sharedFixturePath := filepath.Join(sharedFixturesDir, step.Source) // Corrected: sharedFixturesDir is now relative to test file
+
+			// Construct absolute path to sharedFixturesDir based on projectRoot
+			// Note: projectRoot is already cached and absolute if buildGydncOnce ran.
+			if projectRoot == "" { // Should have been set by buildGydncOnce
+				return fmt.Errorf("projectRoot not initialized; buildGydncOnce must run first")
+			}
+			absoluteSharedFixturesDir := filepath.Join(projectRoot, "tests", "shared_fixtures")
+			sharedFixturePath := filepath.Join(absoluteSharedFixturesDir, step.Source)
+
 			destinationPath := filepath.Join(tempDir, step.Destination)
 
 			if err := os.MkdirAll(filepath.Dir(destinationPath), 0755); err != nil {
@@ -329,10 +390,36 @@ func arrangeTestData(t *testing.T, tempDir, arrangeFile string) error {
 			}
 			if srcInfo.IsDir() {
 				// TODO: Implement directory copying if needed
-				return fmt.Errorf("arrange step %d: copy_fixture for directory source '%s' not implemented", i+1, step.Source)
+				if err := copyDir(sharedFixturePath, destinationPath); err != nil {
+					return fmt.Errorf("arrange step %d (copy_fixture dir %s -> %s): %w", i+1, step.Source, step.Destination, err)
+				}
 			} else {
 				if err := copyFile(sharedFixturePath, destinationPath); err != nil {
 					return fmt.Errorf("arrange step %d (copy_fixture %s -> %s): %w", i+1, step.Source, step.Destination, err)
+				}
+			}
+		case "copy_test_asset":
+			if step.Source == "" || step.Destination == "" {
+				return fmt.Errorf("arrange step %d: copy_test_asset missing 'source' or 'destination'", i+1)
+			}
+			assetPath := filepath.Join(testCasePath, step.Source) // Source is relative to the test case's own directory
+			destinationPath := filepath.Join(tempDir, step.Destination)
+
+			if err := os.MkdirAll(filepath.Dir(destinationPath), 0755); err != nil {
+				return fmt.Errorf("arrange step %d (copy_test_asset %s -> %s): creating parent dir: %w", i+1, step.Source, step.Destination, err)
+			}
+
+			srcInfo, err := os.Stat(assetPath)
+			if err != nil {
+				return fmt.Errorf("arrange step %d (copy_test_asset): accessing source %s: %w", i+1, assetPath, err)
+			}
+			if srcInfo.IsDir() {
+				if err := copyDir(assetPath, destinationPath); err != nil {
+					return fmt.Errorf("arrange step %d (copy_test_asset dir %s -> %s): %w", i+1, step.Source, step.Destination, err)
+				}
+			} else {
+				if err := copyFile(assetPath, destinationPath); err != nil {
+					return fmt.Errorf("arrange step %d (copy_test_asset %s -> %s): %w", i+1, step.Source, step.Destination, err)
 				}
 			}
 		case "run_command":
@@ -378,7 +465,29 @@ func runActScript(t *testing.T, tempDir, actScriptPath string) (stdout, stderr s
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 
-	t.Logf("Executing act script: %s from %s", localActScript, tempDir)
+	// Setup base environment for the script
+	env := os.Environ()
+	// GYDNC_BIN is usually set by the script itself to ./gydnc if not provided.
+	// TEST_TEMP_DIR is primarily for the script's reference if needed.
+	env = append(env, "TEST_TEMP_DIR="+tempDir)
+
+	// Conditionally set GYDNC_CONFIG
+	configInTempDir := filepath.Join(tempDir, "config.yml")
+	var gydncConfigValue string
+	if _, statErr := os.Stat(configInTempDir); statErr == nil {
+		gydncConfigValue = configInTempDir
+		env = append(env, "GYDNC_CONFIG="+gydncConfigValue)
+		t.Logf("Setting GYDNC_CONFIG=%s for act.sh", gydncConfigValue)
+	} else {
+		// If config.yml doesn't exist in tempDir, explicitly set GYDNC_CONFIG to empty.
+		gydncConfigValue = ""
+		env = append(env, "GYDNC_CONFIG="+gydncConfigValue) // Results in "GYDNC_CONFIG="
+		t.Logf("Config file %s not found in tempDir for act.sh. Explicitly setting GYDNC_CONFIG=\"\". Error: %v", configInTempDir, statErr)
+	}
+	cmd.Env = env // Assign the fully constructed environment
+
+	t.Logf("Executing act script: %s from %s with GYDNC_CONFIG='%s'", localActScript, tempDir, gydncConfigValue)
+
 	execErr := cmd.Run()
 
 	stdout = outBuf.String()
@@ -496,6 +605,7 @@ func compareStreamOutput(matchType, expectedContent, actualOutput, streamName st
 			// For better diffs, marshal them back to string (pretty printed)
 			prettyExpected, _ := json.MarshalIndent(expectedJSON, "", "  ")
 			prettyActual, _ := json.MarshalIndent(actualJSON, "", "  ")
+
 			return fmt.Errorf("%s JSON content mismatch.\nExpected:\n```json\n%s\n```\nGot:\n```json\n%s\n```\n(Raw Expected:\n%s\nRaw Actual:\n%s)", streamName, string(prettyExpected), string(prettyActual), expectedContent, actualOutput)
 		}
 	case "YAML":
@@ -518,6 +628,7 @@ func compareStreamOutput(matchType, expectedContent, actualOutput, streamName st
 			// For better diffs, marshal them back to string (pretty printed if possible, though yaml.Marshal is standard)
 			prettyExpected, _ := yaml.Marshal(expectedYAML)
 			prettyActual, _ := yaml.Marshal(actualYAML)
+
 			return fmt.Errorf("%s YAML content mismatch.\nExpected:\n```yaml\n%s\n```\nGot:\n```yaml\n%s\n```\n(Raw Expected:\n%s\nRaw Actual:\n%s)", streamName, string(prettyExpected), string(prettyActual), expectedContent, actualOutput)
 		}
 	default:
@@ -542,7 +653,7 @@ func compareFileSystem(t *testing.T, tempDirRoot string, asserts []FilesystemAss
 					fsErrors = append(fsErrors, fmt.Sprintf("path '%s': expected to exist, but does not", assert.Path))
 				}
 			} else {
-				fsErrors = append(fsErrors, fmt.Sprintf("path '%s': error checking existence: %v", assert.Path, err))
+				fsErrors = append(fsErrors, fmt.Errorf("path '%s': error checking existence: %v", assert.Path, err).Error())
 			}
 			continue
 		}
@@ -605,6 +716,48 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
+// copyDir recursively copies a directory from src to dst
+func copyDir(src string, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if !srcInfo.IsDir() {
+		return fmt.Errorf("source %s is not a directory", src)
+	}
+
+	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		return fmt.Errorf("making destination dir %s: %w", dst, err)
+	}
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return fmt.Errorf("reading source dir %s: %w", src, err)
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err // Error already includes context
+			}
+		} else {
+			// copyFile already handles MkdirAll for the destination file's parent directory
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return fmt.Errorf("copying file %s to %s: %w", srcPath, dstPath, err)
+			}
+		}
+	}
+	return nil
+}
+
 // TODO: Need a robust way to ensure the 'gydnc' binary used by act.sh is the one
 //       built for the test, and it's correctly placed/named in the tempDir for act.sh to find.
 //       The buildGydncOnce tries to address the build, but placement in tempDir is also key.
+
+// logDiscoveryWarning is a helper to standardize warning logs during test discovery.
+func logDiscoveryWarning(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, "Warning: "+format+"\n", args...)
+}

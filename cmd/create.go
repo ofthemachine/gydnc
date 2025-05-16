@@ -10,7 +10,6 @@ import (
 	"gydnc/config"
 	"gydnc/core/content" // For GuidanceContent and ToFileContent
 
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -149,7 +148,7 @@ All necessary parent directories will be created.`,
 		}
 
 		// Generate initial content
-		newID := uuid.New().String()
+		// newID := uuid.New().String() // Removed: ID is now content-addressable
 		title := createTitle
 		if title == "" {
 			// Derive title from filename, removing .g6e and replacing hyphens/underscores
@@ -163,7 +162,7 @@ All necessary parent directories will be created.`,
 
 		// Create an instance of StandardFrontmatter to be marshalled.
 		frontmatterData := content.StandardFrontmatter{
-			ID:          newID,
+			// ID:          newID, // Removed: ID is now content-addressable
 			Title:       title,
 			Description: description,
 			Tags:        tags,
@@ -172,6 +171,11 @@ All necessary parent directories will be created.`,
 		// For the file content, we need the body.
 		// Use the title from the frontmatterData for consistency.
 		fileBodyContent := fmt.Sprintf("# %s\n\nGuidance content for '%s' goes here.\n", frontmatterData.Title, frontmatterData.Title)
+
+		// The conceptual ID is now the SHA256 of fileBodyContent
+		// We can use the utils.Sha256 function here. For now, this is just a conceptual note.
+		// contentID := utils.Sha256([]byte(fileBodyContent))
+		// slog.Info("New guidance content ID (SHA256 of body)", "path", targetFilePath, "contentID", contentID)
 
 		frontmatterBytes, err := yaml.Marshal(&frontmatterData)
 		if err != nil {

@@ -23,9 +23,6 @@ filesystem:
     exists: true
   - path: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
     match_type: SUBSTRING
-    content: "id: "
-  - path: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
-    match_type: SUBSTRING
     content: "title: my-cfg-guidance"
   - path: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
     match_type: SUBSTRING

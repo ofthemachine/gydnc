@@ -23,10 +23,10 @@ type Backend interface {
 	// Implementations should be idempotent where possible.
 	Write(alias string, data []byte, commitMsgDetails map[string]string) error
 
-	// List returns a list of available guidance aliases, potentially filtered by a query string.
-	// The filterQuery syntax is backend-dependent but should allow for common use cases like tag filtering.
-	// It returns a slice of aliases (e.g., "my-rule", "directory/my-other-rule") and an error.
-	List(filterQuery string) (aliases []string, err error)
+	// List retrieves a list of guidance entity IDs (aliases) based on a prefix.
+	// If prefix is empty, it should list all entities in the backend.
+	// Returns a list of IDs (strings).
+	List(prefix string) ([]string, error)
 
 	// GetName returns a unique name for the backend implementation (e.g., "localfs", "git").
 	GetName() string
@@ -36,4 +36,11 @@ type Backend interface {
 	// Exists(alias string) (bool, error)
 	// GetTags(alias string) ([]string, error)
 	// GetAllTags() ([]string, error)
+
+	// Stat retrieves metadata about a guidance entity by its alias.
+	// It returns a map of metadata (e.g., parsed frontmatter, last modified date, author) and an error if the entity cannot be retrieved.
+	Stat(id string) (map[string]interface{}, error)
+
+	// Search performs a more complex search, TBD.
+	// Search(query string) ([]string, error)
 }

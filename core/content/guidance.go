@@ -2,8 +2,12 @@ package content
 
 import (
 	"bytes"
+	// "crypto/sha256" // No longer needed directly
+	// "encoding/hex"  // No longer needed directly
 	"errors"
 	"fmt"
+
+	"gydnc/internal/utils" // Added import for our utils package
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,7 +36,7 @@ type frontmatterYAML struct {
 
 // StandardFrontmatter defines the complete set of metadata fields for a new guidance entity.
 type StandardFrontmatter struct {
-	ID          string   `yaml:"id"`
+	// ID          string   `yaml:"id"` // Removed: ID is now content-addressable
 	Title       string   `yaml:"title"`
 	Description string   `yaml:"description,omitempty"`
 	Tags        []string `yaml:"tags,omitempty"`
@@ -112,4 +116,13 @@ func (gc *GuidanceContent) MarshalFrontmatter() ([]byte, error) {
 		Tags:        gc.Tags,
 	}
 	return yaml.Marshal(&fm)
+}
+
+// GetContentID computes and returns the SHA256 hash of the Body content.
+// This serves as the content-addressable ID for the guidance.
+func (gc *GuidanceContent) GetContentID() (string, error) {
+	if gc == nil {
+		return "", errors.New("cannot get content ID from nil GuidanceContent")
+	}
+	return utils.Sha256([]byte(gc.Body)), nil
 }

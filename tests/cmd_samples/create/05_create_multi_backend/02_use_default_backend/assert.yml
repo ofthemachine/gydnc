@@ -8,10 +8,9 @@ filesystem:
     exists: false
   - path: ".store_primary/multi_backend/default_be_test_entity.g6e"
     exists: true
-    match_type: REGEX
+    match_type: SUBSTRING # Check for exact file content
     content: |
       ---
-      id: [a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}
       title: Default Backend Test
       ---
       # Default Backend Test

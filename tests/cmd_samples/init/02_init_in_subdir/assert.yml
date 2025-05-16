@@ -38,7 +38,7 @@ filesystem:
   - path: "subdir/config.yml"
     exists: true
     match_type: REGEX # Path in config should point to subdir/.gydnc store
-    content: "path: .*/subdir/\\.gydnc"
+    content: 'path: \./\.gydnc'
   - path: "subdir/.gydnc"
     exists: true
     is_dir: true

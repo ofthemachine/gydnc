@@ -8,10 +8,9 @@ filesystem:
     exists: false # Should NOT exist in the primary store
   - path: ".store_secondary/multi_backend/be_flag_test_entity.g6e"
     exists: true
-    match_type: REGEX # Check for some expected content
+    match_type: SUBSTRING # Check for exact file content
     content: |
       ---
-      id: [a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}
       title: Backend Flag Test
       ---
       # Backend Flag Test

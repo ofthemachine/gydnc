@@ -5,16 +5,13 @@ stdout:
   - match_type: SUBSTRING
     content: "Created guidance file:"
   - match_type: SUBSTRING
-    content: "/.gydnc/flagged-guidance.g6e"
+    content: ".gydnc/flagged-guidance.g6e"
 stderr:
   - match_type: SUBSTRING
     content: ""
 filesystem:
   - path: ".gydnc/flagged-guidance.g6e"
     exists: true
-  - path: ".gydnc/flagged-guidance.g6e"
-    match_type: SUBSTRING
-    content: "id: "
   - path: ".gydnc/flagged-guidance.g6e"
     match_type: SUBSTRING
     content: "title: Flagged Guidance Title"

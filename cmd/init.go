@@ -83,15 +83,30 @@ If a path is provided, initialization occurs there. Otherwise, it uses the curre
 		// Create default config.yml at the target base path
 		newCfg := config.NewDefaultConfig()
 		newCfg.DefaultBackend = defaultBackendName
-		// The path for LocalFS should be the absolute path to the guidanceStorePath
-		absGuidanceStorePath, err := filepath.Abs(guidanceStorePath)
-		if err != nil {
-			return fmt.Errorf("failed to get absolute path for guidance store '%s': %w", guidanceStorePath, err)
-		}
+
+		// Path for LocalFS should be relative to the config file if it's within the init target path.
+		// guidanceStorePath is already relative to targetBasePath (e.g., ".gydnc")
+		// configFilePath is targetBasePath + "/config.yml"
+		// So, the path stored in config.yml should be the one relative to config.yml's location.
+		// If targetBasePath is /tmp/foo, and guidanceStorePath is ./.gydnc (meaning /tmp/foo/.gydnc),
+		// and config is /tmp/foo/config.yml, then path stored should be ./.gydnc.
+		// If init path was "subdir", then targetBasePath is CWD/subdir.
+		// guidanceStorePath is CWD/subdir/.gydnc (absolute after Abs on it earlier in file),
+		// config is CWD/subdir/config.yml.
+		// What we need is the path of the store relative to the directory of the config file.
+
+		// guidanceStorePath was initially relative to targetBasePath (e.g. ".gydnc")
+		// Let's re-establish that relative path to be sure, in case targetBasePath itself was complex.
+		// The config file is in targetBasePath. The store is also effectively in targetBasePath + defaultStoreDirName.
+		// So the relative path from config file to store is just defaultStoreDirName.
+		storePathForConfig := defaultStoreDirName // e.g., ".gydnc" or "./.gydnc"
+		// Ensure it's a clean relative path like ".gydnc"
+		storePathForConfig = "./" + filepath.Clean(storePathForConfig)
+
 		newCfg.StorageBackends[defaultBackendName] = &config.StorageConfig{
 			Type: "localfs",
 			LocalFS: &config.LocalFSConfig{
-				Path: absGuidanceStorePath, // Use absolute path in config for clarity
+				Path: storePathForConfig, // Store relative path
 			},
 		}
 
