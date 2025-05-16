@@ -63,35 +63,24 @@ func Load(cliConfigPath string) (*Config, error) {
 		configFilePath = os.Getenv("GYDNC_CONFIG")
 	}
 
-	// If still no path, try the default location: ./.gydnc/config.yml
+	// If still no path, try ~/.gydnc/config.yml
 	if configFilePath == "" {
-		// Check current directory first
-		wd, err := os.Getwd()
-		if err == nil { // If we can get CWD, try it
-			defaultPath := filepath.Join(wd, "config.yml") // Look for config.yml at the root
-			if _, err := os.Stat(defaultPath); err == nil {
-				configFilePath = defaultPath
-				slog.Debug("No explicit config path, using default found at", "path", configFilePath)
-			} else if !os.IsNotExist(err) {
-				// Log a warning if stat fails for a reason other than NotExist for the default path
-				slog.Warn("Error checking default config path ./config.yml", "error", err)
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			homeGydncPath := filepath.Join(homeDir, ".gydnc", "config.yml")
+			if _, err := os.Stat(homeGydncPath); err == nil {
+				configFilePath = homeGydncPath
+				slog.Debug("No explicit config path, using ~/.gydnc/config.yml", "path", configFilePath)
 			}
-		} else {
-			slog.Warn("Could not get current working directory to check for default config.")
 		}
-		// Future: could implement upward search from CWD for .gydnc directory here
 	}
 
 	loadedConfigActualPath = configFilePath // Store the determined path
 
 	if configFilePath == "" {
-		// No configuration file found (neither explicit, nor env, nor default)
-		// Return a basic default config. Commands requiring specific backend paths
-		// will need to handle this (e.g., GetActiveBackend() will return nil or error).
-		// fmt.Println("No config file specified or found by default. Using in-memory defaults.")
 		cfg := NewDefaultConfig()
 		globalConfig = cfg
-		return cfg, nil // Not an error to not find a config, some commands might not need one.
+		return cfg, nil
 	}
 
 	slog.Debug("Attempting to load configuration from", "path", configFilePath)
