@@ -1,22 +1,19 @@
-expected_exit_code: 0
+exit_code: 0
 stdout:
-  - match_type: SUBSTRING # Revert to object structure
-    content: "Updated guidance: .gydnc/update_target_01.g6e"
+  - match_type: ORDERED_LINES
+    content: |
+      Updated guidance: .gydnc/update_target_01.g6e
 stderr: []
 filesystem:
   - path: .gydnc/update_target_01.g6e
-    should_exist: true
-    content_contains:
-      # Check title, description, and sorted tags. Body should remain unchanged.
-      # Ensure content_contains uses multiline string for easier readability and exact match.
-      - |-
-        ---
-        title: Updated Title for 01
-        description: Original Description
-        tags:
-            - common # Match 4-space indent
-            - tag1   # Match 4-space indent
-        ---
-        # Original Title 01
-
-        Guidance content for 'Original Title 01' goes here.
+    match_type: ORDERED_LINES
+    content: |
+      ---
+      title: Updated Title for 01
+      description: Original Description
+      tags:
+          - common
+          - tag1
+      ---
+      # Original Title 01
+      Guidance content for 'Original Title 01' goes here.

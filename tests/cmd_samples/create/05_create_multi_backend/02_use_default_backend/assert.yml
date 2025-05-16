@@ -1,18 +1,17 @@
 exit_code: 0
 stdout:
-  - match_type: SUBSTRING
-    content: "Created guidance file: .store_primary/multi_backend/default_be_test_entity.g6e"
+  - match_type: ORDERED_LINES
+    content: |
+      Created guidance file: .store_primary/multi_backend/default_be_test_entity.g6e
 stderr: []
 filesystem:
   - path: ".store_secondary/multi_backend/default_be_test_entity.g6e"
     exists: false
   - path: ".store_primary/multi_backend/default_be_test_entity.g6e"
-    exists: true
-    match_type: SUBSTRING # Check for exact file content
+    match_type: ORDERED_LINES
     content: |
       ---
       title: Default Backend Test
       ---
       # Default Backend Test
-
       Guidance content for 'Default Backend Test' goes here.

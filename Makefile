@@ -22,7 +22,12 @@ test:
 .PHONY: test-integration
 test-integration:
 	@echo "Running integration tests..."
-	go test ./tests -v -tags=integration
+	@if [ -n "$(DIR)" ]; then \
+		echo "Filtering integration tests to directory: $(DIR)"; \
+		GYDNC_TEST_SUITE_DIR=$(DIR) go test ./tests -v -tags=integration; \
+	else \
+		go test ./tests -v -tags=integration; \
+	fi
 
 fmt:
 	@echo "Formatting code..."

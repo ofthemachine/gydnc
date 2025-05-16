@@ -1,16 +1,15 @@
-exit_code: 1 # Expecting a non-zero exit code from the second 'create' attempt
+exit_code: 1
 stdout:
-  - match_type: SUBSTRING # First create is successful - check for key parts
-    content: "Created guidance file:"
-  - match_type: SUBSTRING # Path for the first successful create
-    content: ".gydnc/existing-guidance.g6e"
-  - match_type: SUBSTRING # Message from act.sh showing the captured exit code
-    content: "Second create attempt exit code: 1"
+  - match_type: ORDERED_LINES
+    content: |
+      Created guidance file:
+      .gydnc/existing-guidance.g6e
+      Second create attempt exit code: 1
 stderr:
-  - match_type: SUBSTRING # Error message from the second 'create' attempt - check for key parts
-    content: "Error: guidance file '"
-  - match_type: SUBSTRING # Path in the error message
-    content: ".gydnc/existing-guidance.g6e' already exists"
+  - match_type: ORDERED_LINES
+    content: |
+      Error: guidance file '
+      .gydnc/existing-guidance.g6e' already exists
 filesystem:
-  - path: ".gydnc/existing-guidance.g6e" # The file should have been created by the first attempt
+  - path: ".gydnc/existing-guidance.g6e"
     exists: true

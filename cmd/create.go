@@ -195,6 +195,8 @@ All necessary parent directories will be created.`,
 		// slog.Info("Successfully created guidance file", "path", targetFilePath)
 		return nil
 	},
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 func init() {

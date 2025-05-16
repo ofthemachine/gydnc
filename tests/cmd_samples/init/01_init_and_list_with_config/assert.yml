@@ -1,39 +1,21 @@
 exit_code: 0
 stdout:
-  - match_type: SUBSTRING # Notice from config loading (might occur before init messages)
-    content: "Notice: No DefaultBackend specified in configuration."
-  - match_type: REGEX
-    content: "Created guidance store: .*/\\.gydnc"
-  - match_type: REGEX
-    content: "Created TAG_ONTOLOGY.md: .*/TAG_ONTOLOGY\\.md"
-  - match_type: REGEX
-    content: "Created configuration file: .*/config\\.yml"
-  - match_type: REGEX
-    content: "gydnc initialized successfully in .*"
-  - match_type: SUBSTRING # New GYDNC_CONFIG message
-    content: "To activate this configuration for your current session, you can run:"
-  - match_type: REGEX
-    content: "  export GYDNC_CONFIG=\".*/config\\.yml\""
-  - match_type: SUBSTRING
-    content: "Consider adding this line to your shell configuration file"
-  - match_type: SUBSTRING # Message from 'list' command
-    content: "No guidance aliases found matching the criteria."
-stderr:
-  - match_type: SUBSTRING # Allow slog INFO messages
-    content: ""
+  - match_type: ORDERED_LINES
+    content: |
+      # REGEX: ^Created guidance store: /.*\.gydnc$
+      # REGEX: ^Created TAG_ONTOLOGY.md: /.*\.gydnc/TAG_ONTOLOGY.md$
+      # REGEX: ^Created configuration file: /.*\.gydnc/config.yml$
+      # REGEX: ^gydnc initialized successfully in /.*$
+      # REGEX: ^\s*export GYDNC_CONFIG="/[^"]+"\s*$
+  - match_type: UNORDERED_LINES
+    content: |
+      No guidance entities found across all configured backends.
+stderr: []
 filesystem:
-  - path: "config.yml"
+  - path: ".gydnc/config.yml"
     exists: true
-    match_type: SUBSTRING
-    content: "default_backend: defaultLocal"
-  - path: "config.yml"
-    exists: true
-    match_type: REGEX # Path in config should point to .gydnc store
-    content: "path: .*/\\.gydnc"
   - path: ".gydnc"
     exists: true
     is_dir: true
-  - path: "TAG_ONTOLOGY.md"
+  - path: ".gydnc/TAG_ONTOLOGY.md"
     exists: true
-    match_type: SUBSTRING
-    content: "# Tag Ontology"

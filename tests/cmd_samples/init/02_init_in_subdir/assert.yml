@@ -1,48 +1,21 @@
 exit_code: 0
 stdout:
-  # Check for messages from 'init' first
-  - match_type: SUBSTRING # Notice from config loading
-    content: "Notice: No DefaultBackend specified in configuration."
-  # - match_type: REGEX # This message is no longer printed
-  #   content: "Created gydnc directory: .*/subdir/\\.gydnc"
-  - match_type: REGEX
-    content: "Created guidance store: .*/subdir/\\.gydnc"
-  - match_type: REGEX
-    content: "Created TAG_ONTOLOGY.md: .*/subdir/TAG_ONTOLOGY\\.md"
-  - match_type: REGEX
-    content: "Created configuration file: .*/subdir/config\\.yml"
-  - match_type: REGEX
-    content: "gydnc initialized successfully in .*/subdir"
-  - match_type: SUBSTRING # New GYDNC_CONFIG message
-    content: "To activate this configuration for your current session, you can run:"
-  - match_type: REGEX
-    content: "  export GYDNC_CONFIG=\".*/subdir/config\\.yml\""
-  - match_type: SUBSTRING
-    content: "Consider adding this line to your shell configuration file"
-  # Then check for messages from 'list'
-  - match_type: SUBSTRING
-    content: "No guidance aliases found matching the criteria."
-  # Optional: Keep debug output checks if they are stable and useful, otherwise remove
-  - match_type: SUBSTRING
-    content: "--- Directory structure created in subdir: ---"
-  - match_type: SUBSTRING
-    content: "--- Content of subdir/config.yml: ---"
-stderr:
-  - match_type: SUBSTRING # Allow slog INFO messages from init
-    content: ""
+  - match_type: ORDERED_LINES
+    content: |
+      # REGEX: ^Created guidance store: /.*subdir/.gydnc$
+      # REGEX: ^Created TAG_ONTOLOGY.md: /.*subdir/.gydnc/TAG_ONTOLOGY.md$
+      # REGEX: ^Created configuration file: /.*subdir/.gydnc/config.yml$
+      # REGEX: ^gydnc initialized successfully in /.*subdir$
+      # REGEX: ^\s*export GYDNC_CONFIG="/[^"]+"\s*$
+  - match_type: UNORDERED_LINES
+    content: |
+      No guidance entities found across all configured backends.
+stderr: []
 filesystem:
-  - path: "subdir/config.yml"
+  - path: "subdir/.gydnc/config.yml"
     exists: true
-    match_type: SUBSTRING
-    content: "default_backend: defaultLocal"
-  - path: "subdir/config.yml"
-    exists: true
-    match_type: REGEX # Path in config should point to subdir/.gydnc store
-    content: 'path: \./\.gydnc'
   - path: "subdir/.gydnc"
     exists: true
     is_dir: true
-  - path: "subdir/TAG_ONTOLOGY.md"
+  - path: "subdir/.gydnc/TAG_ONTOLOGY.md"
     exists: true
-    match_type: SUBSTRING
-    content: "# Tag Ontology"

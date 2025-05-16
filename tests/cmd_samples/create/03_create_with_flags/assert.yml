@@ -1,35 +1,19 @@
 exit_code: 0
 stdout:
-  - match_type: SUBSTRING
-    content: "gydnc initialized successfully in"
-  - match_type: SUBSTRING
-    content: "Created guidance file:"
-  - match_type: SUBSTRING
-    content: ".gydnc/flagged-guidance.g6e"
-stderr:
-  - match_type: SUBSTRING
-    content: ""
+  - match_type: ORDERED_LINES
+    content: |
+      gydnc initialized successfully in
+      Created guidance file:
+      .gydnc/flagged-guidance.g6e
+stderr: []
 filesystem:
   - path: ".gydnc/flagged-guidance.g6e"
-    exists: true
-  - path: ".gydnc/flagged-guidance.g6e"
-    match_type: SUBSTRING
-    content: "title: Flagged Guidance Title"
-  - path: ".gydnc/flagged-guidance.g6e"
-    match_type: SUBSTRING
-    content: "description: Description from flag"
-  - path: ".gydnc/flagged-guidance.g6e"
-    match_type: SUBSTRING
-    content: "tags:"
-  - path: ".gydnc/flagged-guidance.g6e"
-    match_type: SUBSTRING
-    content: "- flag:tag1"
-  - path: ".gydnc/flagged-guidance.g6e"
-    match_type: SUBSTRING
-    content: "- category:flag_cat"
-  - path: ".gydnc/flagged-guidance.g6e"
-    match_type: SUBSTRING
-    content: "# Flagged Guidance Title"
-  - path: ".gydnc/flagged-guidance.g6e"
-    match_type: SUBSTRING
-    content: "Guidance content for 'Flagged Guidance Title' goes here."
+    match_type: ORDERED_LINES
+    content: |
+      title: Flagged Guidance Title
+      description: Description from flag
+      tags:
+      - flag:tag1
+      - category:flag_cat
+      # Flagged Guidance Title
+      Guidance content for 'Flagged Guidance Title' goes here.

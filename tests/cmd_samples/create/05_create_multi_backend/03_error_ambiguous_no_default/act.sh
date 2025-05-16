@@ -1,9 +1,13 @@
 #!/bin/bash
+set -e # Exit on first error
+
+# Copy the test-specific config.yml into the temp directory
+cp ../../multi_backend_test_configs/two_backend_config.yml config.yml
+
+# Try to create a new guidance file with ambiguous backend (should fail)
+set +e # Allow failure for this command
+GYDNC_CONFIG=config.yml ./gydnc create multi_backend/ambiguous_test_entity
+EXIT_CODE=$?
 set -e
 
-mkdir -p .store_primary
-mkdir -p .store_secondary
-
-# Attempt to create without specifying backend, expecting an error
-# The actual script will exit with non-zero due to `set -e` if gydnc errors, which is caught by harness.
-./gydnc create --config ./config.yml multi_backend/ambiguous_test_entity --title "Ambiguous Test"
+echo "Create attempt exit code: $EXIT_CODE"

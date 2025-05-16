@@ -1,18 +1,19 @@
 #!/bin/bash
-# Exit on first error is NOT set here, as we expect the second create to fail
+set -e # Exit on first error
 
-# Initialize gydnc
+# Initialize gydnc in the current directory
 ./gydnc init .
 
-# Create a guidance file for the first time (should succeed)
-./gydnc create existing-guidance
+# Create a new guidance file
+GYDNC_CONFIG=.gydnc/config.yml ./gydnc create existing-guidance
 
-# Attempt to create the same guidance file again (should fail)
-./gydnc create existing-guidance
+# Try to create the same file again (should fail)
+set +e # Allow failure for this command
+GYDNC_CONFIG=.gydnc/config.yml ./gydnc create existing-guidance
+SECOND_EXIT_CODE=$?
+set -e
 
-# Capture the exit code of the second attempt
-SECOND_CREATE_EXIT_CODE=$?
-echo "Second create attempt exit code: $SECOND_CREATE_EXIT_CODE"
+echo "Second create attempt exit code: $SECOND_EXIT_CODE"
 
 # Exit with the captured code so assert.yml can check it, but also ensure it's non-zero for the test runner
-exit $SECOND_CREATE_EXIT_CODE
+exit $SECOND_EXIT_CODE

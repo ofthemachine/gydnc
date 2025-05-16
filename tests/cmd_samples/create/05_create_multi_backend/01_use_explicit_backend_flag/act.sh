@@ -6,7 +6,8 @@ set -e
 mkdir -p .store_primary
 mkdir -p .store_secondary
 
-# Run the create command, targeting the 'secondary' backend via flag,
-# using the specific config file for this test.
-# No init is run to preserve the test-specific config.
-./gydnc create --config ./config.yml --backend secondary multi_backend/be_flag_test_entity --title "Backend Flag Test"
+# Copy the test-specific config.yml into the temp directory
+cp ../../multi_backend_test_configs/two_backend_config.yml config.yml
+
+# Create a new guidance file using the explicit backend flag
+GYDNC_CONFIG=config.yml ./gydnc create --backend secondary multi_backend/be_flag_test_entity --title "Backend Flag Test"

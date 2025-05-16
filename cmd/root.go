@@ -21,6 +21,8 @@ var rootCmd = &cobra.Command{
 	Long: `gydnc is a command-line interface for creating, managing, and retrieving
 guidance entities. It supports various backends and aims to provide
 a robust system for AI guidance versioning and discovery.`,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },

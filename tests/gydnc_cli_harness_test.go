@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -71,6 +72,12 @@ var ( // package-level variable to track build status
 	gydncBuildErr error
 	gydncBuilt    bool
 	projectRoot   string // Cached project root
+)
+
+var (
+	totalTests  int32
+	passedTests int32
+	failedTests int32
 )
 
 // findProjectRoot searches upwards from an initial path for a marker file (e.g., go.mod)
@@ -144,19 +151,31 @@ func buildGydncOnce(t *testing.T) string {
 	return filepath.Join(projectRoot, "gydnc") // Path for the built binary, relative to FS root
 }
 
+func TestMain(m *testing.M) {
+	code := m.Run()
+	fmt.Printf("\n==============================\n")
+	fmt.Printf("TestCLI Suite Summary: %d passed, %d failed, %d total\n", atomic.LoadInt32(&passedTests), atomic.LoadInt32(&failedTests), atomic.LoadInt32(&totalTests))
+	fmt.Printf("==============================\n")
+	os.Exit(code)
+}
+
 func TestCLI(t *testing.T) {
 	// Build the binary once for all tests.
-	// The path returned is relative to the project root.
 	gydncBinaryPath := buildGydncOnce(t)
 
-	testCases, err := discoverTestCases(baseTestDir)
+	// Allow filtering test cases by directory via env var
+	testDir := os.Getenv("GYDNC_TEST_SUITE_DIR")
+	if testDir == "" {
+		testDir = baseTestDir
+	}
+
+	testCases, err := discoverTestCases(testDir)
 	if err != nil {
 		t.Fatalf("Failed to discover test cases: %v", err)
 	}
 
-	// Check if tests were discovered
 	if len(testCases) == 0 {
-		t.Logf("No test cases found in %s", baseTestDir)
+		t.Logf("No test cases found in %s", testDir)
 		return
 	} else {
 		t.Logf("Discovered %d test cases", len(testCases))
@@ -165,21 +184,48 @@ func TestCLI(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc // Capture range variable
 		t.Run(tc.Name, func(t *testing.T) {
-			t.Parallel()            // Run test cases in parallel
-			startTime := time.Now() // Record start time
-
-			// Deferred function to print the summary marker line
+			t.Parallel()
+			atomic.AddInt32(&totalTests, 1)
+			startTime := time.Now()
 			defer func() {
 				statusStr := "PASS"
 				if t.Failed() {
 					statusStr = "FAIL"
+					atomic.AddInt32(&failedTests, 1)
+				} else {
+					atomic.AddInt32(&passedTests, 1)
 				}
 				duration := time.Since(startTime)
 				fmt.Printf("TEST_SUMMARY_MARKER: %s - %s (%.2fs)\n", tc.Name, statusStr, duration.Seconds())
 			}()
-
 			tempDir := t.TempDir()
 			t.Logf("Test %s running in tempDir: %s", tc.Name, tempDir)
+
+			// --- PRE HOOK ---
+			preScriptPath := filepath.Join(tc.Path, "pre.sh")
+			if _, err := os.Stat(preScriptPath); err == nil {
+				preOut, preErr, preExit, preRunErr := runHookScript(t, tempDir, preScriptPath, "pre.sh")
+				t.Logf("pre.sh stdout:\n%s", preOut)
+				t.Logf("pre.sh stderr:\n%s", preErr)
+				t.Logf("pre.sh exitCode: %d", preExit)
+				if preRunErr != nil {
+					t.Fatalf("pre.sh failed: %v", preRunErr)
+				}
+			}
+
+			// --- POST HOOK (deferred) ---
+			postScriptPath := filepath.Join(tc.Path, "post.sh")
+			defer func() {
+				if _, err := os.Stat(postScriptPath); err == nil {
+					postOut, postErr, postExit, postRunErr := runHookScript(t, tempDir, postScriptPath, "post.sh")
+					t.Logf("post.sh stdout:\n%s", postOut)
+					t.Logf("post.sh stderr:\n%s", postErr)
+					t.Logf("post.sh exitCode: %d", postExit)
+					if postRunErr != nil {
+						t.Errorf("post.sh failed: %v", postRunErr)
+					}
+				}
+			}()
 
 			// Copy config.yml if it exists for the test case
 			srcConfigPath := filepath.Join(tc.Path, "config.yml")
@@ -467,26 +513,11 @@ func runActScript(t *testing.T, tempDir, actScriptPath string) (stdout, stderr s
 
 	// Setup base environment for the script
 	env := os.Environ()
-	// GYDNC_BIN is usually set by the script itself to ./gydnc if not provided.
 	// TEST_TEMP_DIR is primarily for the script's reference if needed.
 	env = append(env, "TEST_TEMP_DIR="+tempDir)
-
-	// Conditionally set GYDNC_CONFIG
-	configInTempDir := filepath.Join(tempDir, "config.yml")
-	var gydncConfigValue string
-	if _, statErr := os.Stat(configInTempDir); statErr == nil {
-		gydncConfigValue = configInTempDir
-		env = append(env, "GYDNC_CONFIG="+gydncConfigValue)
-		t.Logf("Setting GYDNC_CONFIG=%s for act.sh", gydncConfigValue)
-	} else {
-		// If config.yml doesn't exist in tempDir, explicitly set GYDNC_CONFIG to empty.
-		gydncConfigValue = ""
-		env = append(env, "GYDNC_CONFIG="+gydncConfigValue) // Results in "GYDNC_CONFIG="
-		t.Logf("Config file %s not found in tempDir for act.sh. Explicitly setting GYDNC_CONFIG=\"\". Error: %v", configInTempDir, statErr)
-	}
 	cmd.Env = env // Assign the fully constructed environment
 
-	t.Logf("Executing act script: %s from %s with GYDNC_CONFIG='%s'", localActScript, tempDir, gydncConfigValue)
+	t.Logf("Executing act script: %s from %s", localActScript, tempDir)
 
 	execErr := cmd.Run()
 
@@ -556,12 +587,16 @@ func compareStreamOutput(matchType, expectedContent, actualOutput, streamName st
 		matchType = "EXACT"
 	}
 
-	// For EXACT, SUBSTRING, REGEX, trimming is fine.
-	// For JSON and YAML, we generally want to compare the raw string.
-	// However, if the harness always provides trimmed actualOutput,
-	// and expectedContent in YAML is also effectively trimmed by the parser,
-	// this might be okay. Let's be mindful.
-	// For now, keep trim for non-JSON/YAML, and use raw for JSON/YAML.
+	// Supported matchers:
+	// EXACT: strict string match (trimmed)
+	// SUBSTRING: expectedContent must appear in actualOutput
+	// REGEX: expectedContent is a regex pattern
+	// JSON: deep equality of parsed JSON
+	// YAML: deep equality of parsed YAML
+	// UNORDERED_LINES: all lines in expectedContent must appear in actualOutput, order doesn't matter
+	// PARTIAL_YAML: expectedContent YAML must be a subset of actualOutput YAML
+	// GOLDEN: expectedContent is a path to a golden file, compare actualOutput to its contents
+	// ORDERED_LINES: all expected lines must appear in the actual output, in the given order
 
 	switch strings.ToUpper(matchType) {
 	case "EXACT":
@@ -571,13 +606,10 @@ func compareStreamOutput(matchType, expectedContent, actualOutput, streamName st
 			return fmt.Errorf("%s exact match failed.\nExpected:\n```\n%s\n```\nGot:\n```\n%s\n```", streamName, normExpected, normActual)
 		}
 	case "SUBSTRING":
-		// Substring doesn't usually need trimming of expected content.
-		// actualOutput might be trimmed if it makes sense generally.
 		if !strings.Contains(actualOutput, expectedContent) {
 			return fmt.Errorf("%s substring match failed. Expected to find:\n```\n%s\n```\nIn output:\n```\n%s\n```", streamName, expectedContent, actualOutput)
 		}
 	case "REGEX":
-		// Regex operates on the raw string.
 		matched, err := regexp.MatchString(expectedContent, actualOutput)
 		if err != nil {
 			return fmt.Errorf("invalid regex in %s assertion: %w", streamName, err)
@@ -587,52 +619,118 @@ func compareStreamOutput(matchType, expectedContent, actualOutput, streamName st
 		}
 	case "JSON":
 		var expectedJSON, actualJSON interface{}
-
-		// Unmarshal expected JSON
 		if err := json.Unmarshal([]byte(expectedContent), &expectedJSON); err != nil {
 			return fmt.Errorf("%s: failed to unmarshal expected JSON content: %w\nExpected JSON string:\n```\n%s\n```", streamName, err, expectedContent)
 		}
-
-		// Unmarshal actual JSON output
 		if err := json.Unmarshal([]byte(actualOutput), &actualJSON); err != nil {
-			// Try to trim whitespace and retry for actual output, as it might have leading/trailing newlines from CLI output
 			if errRetry := json.Unmarshal([]byte(strings.TrimSpace(actualOutput)), &actualJSON); errRetry != nil {
 				return fmt.Errorf("%s: failed to unmarshal actual output as JSON: %w (original error: %s)\nActual output string:\n```\n%s\n```", streamName, errRetry, err.Error(), actualOutput)
 			}
 		}
-
 		if !reflect.DeepEqual(expectedJSON, actualJSON) {
-			// For better diffs, marshal them back to string (pretty printed)
 			prettyExpected, _ := json.MarshalIndent(expectedJSON, "", "  ")
 			prettyActual, _ := json.MarshalIndent(actualJSON, "", "  ")
-
 			return fmt.Errorf("%s JSON content mismatch.\nExpected:\n```json\n%s\n```\nGot:\n```json\n%s\n```\n(Raw Expected:\n%s\nRaw Actual:\n%s)", streamName, string(prettyExpected), string(prettyActual), expectedContent, actualOutput)
 		}
 	case "YAML":
 		var expectedYAML, actualYAML interface{}
-
-		// Unmarshal expected YAML
 		if err := yaml.Unmarshal([]byte(expectedContent), &expectedYAML); err != nil {
 			return fmt.Errorf("%s: failed to unmarshal expected YAML content: %w\nExpected YAML string:\n```\n%s\n```", streamName, err, expectedContent)
 		}
-
-		// Unmarshal actual YAML output
 		if err := yaml.Unmarshal([]byte(actualOutput), &actualYAML); err != nil {
-			// Try to trim whitespace and retry for actual output
 			if errRetry := yaml.Unmarshal([]byte(strings.TrimSpace(actualOutput)), &actualYAML); errRetry != nil {
 				return fmt.Errorf("%s: failed to unmarshal actual output as YAML: %w (original error: %s)\nActual output string:\n```\n%s\n```", streamName, errRetry, err.Error(), actualOutput)
 			}
 		}
-
 		if !reflect.DeepEqual(expectedYAML, actualYAML) {
-			// For better diffs, marshal them back to string (pretty printed if possible, though yaml.Marshal is standard)
 			prettyExpected, _ := yaml.Marshal(expectedYAML)
 			prettyActual, _ := yaml.Marshal(actualYAML)
-
 			return fmt.Errorf("%s YAML content mismatch.\nExpected:\n```yaml\n%s\n```\nGot:\n```yaml\n%s\n```\n(Raw Expected:\n%s\nRaw Actual:\n%s)", streamName, string(prettyExpected), string(prettyActual), expectedContent, actualOutput)
 		}
+	case "UNORDERED_LINES":
+		expLines := strings.Split(strings.TrimSpace(expectedContent), "\n")
+		actLines := strings.Split(strings.TrimSpace(actualOutput), "\n")
+		lineSet := make(map[string]int)
+		for _, l := range actLines {
+			lineSet[strings.TrimSpace(l)]++
+		}
+		for _, l := range expLines {
+			l = strings.TrimSpace(l)
+			if l == "" {
+				continue
+			}
+			if lineSet[l] == 0 {
+				return fmt.Errorf("%s unordered line match failed. Missing line:\n%s", streamName, l)
+			}
+			lineSet[l]--
+		}
+	case "PARTIAL_YAML":
+		var expectedYAML, actualYAML map[string]interface{}
+		if err := yaml.Unmarshal([]byte(expectedContent), &expectedYAML); err != nil {
+			return fmt.Errorf("%s: failed to unmarshal expected YAML content: %w\nExpected YAML string:\n```\n%s\n```", streamName, err, expectedContent)
+		}
+		if err := yaml.Unmarshal([]byte(actualOutput), &actualYAML); err != nil {
+			if errRetry := yaml.Unmarshal([]byte(strings.TrimSpace(actualOutput)), &actualYAML); errRetry != nil {
+				return fmt.Errorf("%s: failed to unmarshal actual output as YAML: %w (original error: %s)\nActual output string:\n```\n%s\n```", streamName, errRetry, err.Error(), actualOutput)
+			}
+		}
+		for k, v := range expectedYAML {
+			if !reflect.DeepEqual(actualYAML[k], v) {
+				return fmt.Errorf("%s PARTIAL_YAML mismatch: key '%s' expected value '%v', got '%v'", streamName, k, v, actualYAML[k])
+			}
+		}
+	case "GOLDEN":
+		goldenPath := strings.TrimSpace(expectedContent)
+		goldenData, err := os.ReadFile(goldenPath)
+		if err != nil {
+			return fmt.Errorf("%s GOLDEN matcher: failed to read golden file %s: %w", streamName, goldenPath, err)
+		}
+		if strings.TrimSpace(actualOutput) != strings.TrimSpace(string(goldenData)) {
+			return fmt.Errorf("%s GOLDEN matcher failed.\nExpected (from %s):\n```\n%s\n```\nGot:\n```\n%s\n```", streamName, goldenPath, string(goldenData), actualOutput)
+		}
+	case "ORDERED_LINES":
+		expLines := strings.Split(strings.TrimSpace(expectedContent), "\n")
+		actLines := strings.Split(strings.TrimSpace(actualOutput), "\n")
+		actIdx := 0
+		for _, exp := range expLines {
+			exp = strings.TrimSpace(exp)
+			if exp == "" {
+				continue
+			}
+			found := false
+			isRegex := false
+			var regexPattern string
+			if strings.HasPrefix(exp, "# REGEX: ") {
+				isRegex = true
+				regexPattern = strings.TrimSpace(strings.TrimPrefix(exp, "# REGEX: "))
+			}
+			for ; actIdx < len(actLines); actIdx++ {
+				actual := strings.TrimSpace(actLines[actIdx])
+				if isRegex {
+					matched, err := regexp.MatchString(regexPattern, actual)
+					if err != nil {
+						return fmt.Errorf("%s ORDERED_LINES regex error: %v (pattern: %q)", streamName, err, regexPattern)
+					}
+					if matched {
+						found = true
+						actIdx++
+						break
+					}
+				} else if actual == exp {
+					found = true
+					actIdx++
+					break
+				}
+			}
+			if !found {
+				if isRegex {
+					return fmt.Errorf("%s ORDERED_LINES regex match failed. Pattern: %q not found in order.", streamName, regexPattern)
+				}
+				return fmt.Errorf("%s ORDERED_LINES match failed. Expected line in order but not found: %q", streamName, exp)
+			}
+		}
 	default:
-		return fmt.Errorf("unknown match_type '%s' for %s assertion. Supported: EXACT, SUBSTRING, REGEX, JSON, YAML", matchType, streamName)
+		return fmt.Errorf("unknown match_type '%s' for %s assertion. Supported: EXACT, SUBSTRING, REGEX, JSON, YAML, UNORDERED_LINES, PARTIAL_YAML, GOLDEN, ORDERED_LINES", matchType, streamName)
 	}
 	return nil
 }
@@ -760,4 +858,38 @@ func copyDir(src string, dst string) error {
 // logDiscoveryWarning is a helper to standardize warning logs during test discovery.
 func logDiscoveryWarning(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "Warning: "+format+"\n", args...)
+}
+
+func runHookScript(t *testing.T, tempDir, scriptPath, scriptName string) (stdout, stderr string, exitCode int, err error) {
+	t.Helper()
+	localScript := filepath.Join(tempDir, scriptName)
+	if err := copyFile(scriptPath, localScript); err != nil {
+		return "", "", -1, fmt.Errorf("copying %s to tempDir: %w", scriptName, err)
+	}
+	if err := os.Chmod(localScript, 0755); err != nil {
+		return "", "", -1, fmt.Errorf("chmod %s in tempDir: %w", scriptName, err)
+	}
+
+	cmd := exec.Command("./" + scriptName)
+	cmd.Dir = tempDir
+
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	env := os.Environ()
+	env = append(env, "TEST_TEMP_DIR="+tempDir)
+	cmd.Env = env
+
+	execErr := cmd.Run()
+	stdout = outBuf.String()
+	stderr = errBuf.String()
+
+	if execErr != nil {
+		if exitError, ok := execErr.(*exec.ExitError); ok {
+			return stdout, stderr, exitError.ExitCode(), execErr
+		}
+		return stdout, stderr, -1, fmt.Errorf("running %s failed: %w", scriptName, execErr)
+	}
+	return stdout, stderr, 0, nil
 }

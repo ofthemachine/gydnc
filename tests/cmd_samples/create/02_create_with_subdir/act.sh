@@ -1,13 +1,15 @@
 #!/bin/bash
 set -e # Exit on first error
 
-# Initialize gydnc in the current directory
-./gydnc init .
+SUBDIR_NAME="category"
 
-# Create a new guidance file with a path-like alias
-# This should create .gydnc/category/my-sub-guidance.g6e
-./gydnc create category/my-sub-guidance
+# Initialize gydnc in the subdirectory
+./gydnc init "${SUBDIR_NAME}"
 
-# Optional: Display the created file for debugging
-echo "--- Content of .gydnc/category/my-sub-guidance.g6e: ---"
-cat .gydnc/category/my-sub-guidance.g6e
+# Create a new guidance file using the --config flag
+# This will now be created at ${SUBDIR_NAME}/.gydnc/my-sub-guidance.g6e
+./gydnc create --config "${SUBDIR_NAME}/.gydnc/config.yml" "${SUBDIR_NAME}/my-sub-guidance"
+
+# Optional: Display the created file for debugging (not asserted by default)
+echo "--- Content of ${SUBDIR_NAME}/.gydnc/my-sub-guidance.g6e: ---"
+cat "${SUBDIR_NAME}/.gydnc/my-sub-guidance.g6e"

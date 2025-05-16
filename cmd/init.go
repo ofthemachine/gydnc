@@ -1,16 +1,19 @@
 package cmd
 
 import (
+	_ "embed"
 	"fmt"
+	"gydnc/config"
 	"log/slog"
 	"os"
 	"path/filepath"
 
-	"gydnc/config"
-
 	"github.com/spf13/cobra"
 	// "os/exec" // For optional git init
 )
+
+//go:embed tag_ontology.md
+var tagOntologyContent []byte
 
 const (
 	// defaultGydncDirName is now the store directory itself
@@ -25,8 +28,7 @@ const (
 var initCmd = &cobra.Command{
 	Use:   "init [path]",
 	Short: "Initialize a new gydnc repository and configuration in the specified path or current directory",
-	Long: `Creates a configuration file (config.yml) and TAG_ONTOLOGY.md at the root of the target path,
-and a .gydnc directory to serve as the default guidance store.
+	Long: `Creates a configuration file and tag ontology in the .gydnc directory of the target path.
 If a path is provided, initialization occurs there. Otherwise, it uses the current directory.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -51,65 +53,44 @@ If a path is provided, initialization occurs there. Otherwise, it uses the curre
 		}
 		slog.Info("Target base path for initialization set", "path", targetBasePath)
 
-		configFilePath := filepath.Join(targetBasePath, defaultConfigFileName)
-		guidanceStorePath := filepath.Join(targetBasePath, defaultStoreDirName)
-		tagOntologyFilePath := filepath.Join(targetBasePath, defaultTagOntologyFileName)
+		gydncDirPath := filepath.Join(targetBasePath, defaultStoreDirName)
+		configFilePath := filepath.Join(gydncDirPath, defaultConfigFileName)
+		tagOntologyFilePath := filepath.Join(gydncDirPath, defaultTagOntologyFileName)
 
 		slog.Info("Initializing gydnc repository structure",
 			"config_file", configFilePath,
-			"store_dir", guidanceStorePath,
+			"store_dir", gydncDirPath,
 			"tag_ontology", tagOntologyFilePath)
 
-		// Check if config file already exists to prevent accidental overwrite
+		// Check if .gydnc/config.yml already exists to prevent accidental overwrite
 		if _, err := os.Stat(configFilePath); err == nil {
 			return fmt.Errorf("gydnc already initialized: '%s' exists. Use --force to overwrite (not implemented).", configFilePath)
 		} else if !os.IsNotExist(err) {
 			return fmt.Errorf("failed to check for existing '%s' file: %w", configFilePath, err)
 		}
 
-		// Create guidance store directory (.gydnc)
-		if err := os.MkdirAll(guidanceStorePath, 0755); err != nil {
-			return fmt.Errorf("failed to create guidance store directory '%s': %w", guidanceStorePath, err)
+		// Create .gydnc directory
+		if err := os.MkdirAll(gydncDirPath, 0755); err != nil {
+			return fmt.Errorf("failed to create .gydnc directory '%s': %w", gydncDirPath, err)
 		}
-		fmt.Printf("Created guidance store: %s\n", guidanceStorePath)
+		fmt.Printf("Created guidance store: %s\n", gydncDirPath)
 
-		// Create TAG_ONTOLOGY.md at the target base path
-		tagOntologyContent := []byte("# Tag Ontology\n\nThis file defines the taxonomy of tags used for guidance entities.\n\n## Categories\n\n- category:example_category\n  description: An example category for tags.\n\n## Tags\n\n- tag:example_tag\n  description: An example tag.\n  category: example_category\n")
+		// Write embedded TAG_ONTOLOGY.md to .gydnc
 		if err := os.WriteFile(tagOntologyFilePath, tagOntologyContent, 0644); err != nil {
 			return fmt.Errorf("failed to create TAG_ONTOLOGY.md at '%s': %w", tagOntologyFilePath, err)
 		}
 		fmt.Printf("Created TAG_ONTOLOGY.md: %s\n", tagOntologyFilePath)
 
-		// Create default config.yml at the target base path
+		// Create default config.yml in .gydnc
 		newCfg := config.NewDefaultConfig()
 		newCfg.DefaultBackend = defaultBackendName
-
-		// Path for LocalFS should be relative to the config file if it's within the init target path.
-		// guidanceStorePath is already relative to targetBasePath (e.g., ".gydnc")
-		// configFilePath is targetBasePath + "/config.yml"
-		// So, the path stored in config.yml should be the one relative to config.yml's location.
-		// If targetBasePath is /tmp/foo, and guidanceStorePath is ./.gydnc (meaning /tmp/foo/.gydnc),
-		// and config is /tmp/foo/config.yml, then path stored should be ./.gydnc.
-		// If init path was "subdir", then targetBasePath is CWD/subdir.
-		// guidanceStorePath is CWD/subdir/.gydnc (absolute after Abs on it earlier in file),
-		// config is CWD/subdir/config.yml.
-		// What we need is the path of the store relative to the directory of the config file.
-
-		// guidanceStorePath was initially relative to targetBasePath (e.g. ".gydnc")
-		// Let's re-establish that relative path to be sure, in case targetBasePath itself was complex.
-		// The config file is in targetBasePath. The store is also effectively in targetBasePath + defaultStoreDirName.
-		// So the relative path from config file to store is just defaultStoreDirName.
-		storePathForConfig := defaultStoreDirName // e.g., ".gydnc" or "./.gydnc"
-		// Ensure it's a clean relative path like ".gydnc"
-		storePathForConfig = "./" + filepath.Clean(storePathForConfig)
-
+		storePathForConfig := "."
 		newCfg.StorageBackends[defaultBackendName] = &config.StorageConfig{
 			Type: "localfs",
 			LocalFS: &config.LocalFSConfig{
-				Path: storePathForConfig, // Store relative path
+				Path: storePathForConfig, // Store path is "." relative to .gydnc/config.yml
 			},
 		}
-
 		if err := config.Save(newCfg, configFilePath); err != nil {
 			return fmt.Errorf("failed to save configuration file '%s': %w", configFilePath, err)
 		}
