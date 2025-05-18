@@ -88,11 +88,18 @@ func TestConfigLoadPriority(t *testing.T) {
 
 			// For the home directory fallback test, remove the CWD .gydnc/config.yml
 			if tt.name == "Home directory is last priority" {
-				// No-op: no CWD config to remove in this version
+				t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
+				// For this specific test case, also ensure GYDNC_CONFIG is NOT set
+				t.Setenv("GYDNC_CONFIG", "") // Unset it explicitly for the test
+
+				// TODO: This if block was empty and caused a linting error (SA9003: empty branch).
+				// If there was intended logic here, it needs to be implemented.
+				// if tt.name == "Home directory is last priority" {
+				// }
 			}
 
 			// Load config
-			cfg, err := Load(tt.cliArg)
+			cfg, err := Load(tt.cliArg, false)
 			if err != nil {
 				t.Fatalf("Load() error = %v", err)
 			}
@@ -126,7 +133,7 @@ func TestConfigLoadNoConfig(t *testing.T) {
 	os.Unsetenv("GYDNC_CONFIG")
 
 	// Load config with no files present
-	cfg, err := Load("")
+	cfg, err := Load("", false)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}

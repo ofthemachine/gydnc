@@ -12,6 +12,7 @@ import (
 
 	"gydnc/config"
 	"gydnc/core/content"
+	"gydnc/model"
 	"gydnc/storage"
 	"gydnc/storage/localfs" // Specific for localfs.NewStore
 
@@ -93,21 +94,33 @@ the file will not be modified.`,
 			return fmt.Errorf("failed to parse existing content for '%s' ('%s'): %w", alias, actualPath, err)
 		}
 
+		entity := model.Entity{
+			Alias:          alias,
+			SourceBackend:  backendName,
+			Title:          parsedContent.Title,
+			Description:    parsedContent.Description,
+			Tags:           parsedContent.Tags,
+			CustomMetadata: entityMetadata,
+			Body:           parsedContent.Body,
+		}
+		cid, _ := parsedContent.GetContentID()
+		entity.CID = cid
+
 		contentModified := false
 		originalForTagComparison, _ := content.ParseG6E(originalContentBytes)
 
 		if cmd.Flags().Changed("title") {
-			if parsedContent.Title != updateTitle {
-				// slog.Debug("Updating title", "old", parsedContent.Title, "new", updateTitle)
+			if entity.Title != updateTitle {
 				parsedContent.Title = updateTitle
+				entity.Title = updateTitle
 				contentModified = true
 			}
 		}
 
 		if cmd.Flags().Changed("description") {
-			if parsedContent.Description != updateDescription {
-				// slog.Debug("Updating description", "old", parsedContent.Description, "new", updateDescription)
+			if entity.Description != updateDescription {
 				parsedContent.Description = updateDescription
+				entity.Description = updateDescription
 				contentModified = true
 			}
 		}
@@ -146,7 +159,8 @@ the file will not be modified.`,
 		if !slices.Equal(prospectiveTags, originalForTagComparison.Tags) {
 			contentModified = true
 		}
-		parsedContent.Tags = prospectiveTags // Assign the (potentially new and/or always sorted) tags
+		parsedContent.Tags = prospectiveTags
+		entity.Tags = prospectiveTags
 
 		var newBodyBytes []byte
 		stat, _ := os.Stdin.Stat()
@@ -165,9 +179,9 @@ the file will not be modified.`,
 				newBodyBytes = newBodyBytes[:len(newBodyBytes)-1] // Trim trailing newline from stdin read
 			}
 
-			if string(newBodyBytes) != parsedContent.Body {
-				// slog.Debug("Updating body from stdin")
+			if string(newBodyBytes) != entity.Body {
 				parsedContent.Body = string(newBodyBytes)
+				entity.Body = string(newBodyBytes)
 				contentModified = true
 			}
 		}

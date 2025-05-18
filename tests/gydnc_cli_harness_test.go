@@ -511,11 +511,15 @@ func runActScript(t *testing.T, tempDir, actScriptPath string) (stdout, stderr s
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 
-	// Setup base environment for the script
-	env := os.Environ()
-	// TEST_TEMP_DIR is primarily for the script's reference if needed.
-	env = append(env, "TEST_TEMP_DIR="+tempDir)
-	cmd.Env = env // Assign the fully constructed environment
+	// Build a minimal, allow-listed environment for the subprocess
+	allowVars := []string{"HOME", "PATH", "USER", "SHELL", "LANG", "TZ"}
+	cleanEnv := []string{"TEST_TEMP_DIR=" + tempDir}
+	for _, key := range allowVars {
+		if val, ok := os.LookupEnv(key); ok {
+			cleanEnv = append(cleanEnv, key+"="+val)
+		}
+	}
+	cmd.Env = cleanEnv
 
 	t.Logf("Executing act script: %s from %s", localActScript, tempDir)
 

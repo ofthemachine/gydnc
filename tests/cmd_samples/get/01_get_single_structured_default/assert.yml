@@ -3,16 +3,13 @@ stdout:
   - match_type: JSON
     content: |
       {
-        "id": "9675fda147a1b1dc05bc59d802d33c2c3fb6c9f43eba8db46d95b1b66c5949b8",
-        "frontmatter": {
-          "title": "Test Alpha Title",
-          "description": "Description for Alpha.",
-          "tags": [
-            "go",
-            "test",
-            "alpha"
-          ]
-        },
+        "title": "Test Alpha Title",
+        "description": "Description for Alpha.",
+        "tags": [
+          "go",
+          "test",
+          "alpha"
+        ],
         "body": "# Test Alpha Title\\n\\nGuidance content for 'Test Alpha Title' goes here.\\n\nThis is the body content\nfor Test Alpha.\nIt has multiple lines.\n"
       }
-stderr: [] # Expect no stderr
+stderr: []

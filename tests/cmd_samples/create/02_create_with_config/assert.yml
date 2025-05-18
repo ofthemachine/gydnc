@@ -4,7 +4,13 @@ stdout:
     content: |
       # REGEX: ^gydnc initialized successfully in /.*/subdir_cfg_create$
       Created guidance file: subdir_cfg_create/.gydnc/my-cfg-guidance.g6e
-stderr: []
+# Only assert on INFO logs and actual output, not the Notice.
+stderr:
+  - match_type: ORDERED_LINES
+    content: |
+      # REGEX: ^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} INFO Target base path for initialization set path=.*/subdir_cfg_create$
+      # REGEX: ^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} INFO Initializing gydnc repository structure config_file=.*/subdir_cfg_create/.gydnc/config.yml store_dir=.*/subdir_cfg_create/.gydnc tag_ontology=.*/subdir_cfg_create/.gydnc/TAG_ONTOLOGY.md$
+      # REGEX: ^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} INFO 'init' command finished successfully.$
 filesystem:
   - path: "subdir_cfg_create/.gydnc/config.yml"
     exists: true
@@ -20,6 +26,4 @@ filesystem:
       ---
       title: my-cfg-guidance
       ---
-      # my-cfg-guidance
-
-      Guidance content for 'my-cfg-guidance' goes here.
+      # my-cfg-guidance\n\nGuidance content for 'my-cfg-guidance' goes here.\n

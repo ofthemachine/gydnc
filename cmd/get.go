@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"gydnc/core/content"
+	"gydnc/model"
 
 	"github.com/spf13/cobra"
 )
@@ -14,16 +15,25 @@ import (
 var outputFormatGet string
 
 // --- Structs for "structured" JSON output ---
-type StructuredGuidanceOutput struct {
-	ID          string          `json:"id"`
-	Frontmatter FrontmatterData `json:"frontmatter"`
-	Body        string          `json:"body"`
-}
+// OLD STRUCTS:
+// type StructuredGuidanceOutput struct {
+// 	ID          string          `json:"id"`
+// 	Frontmatter FrontmatterData `json:"frontmatter"`
+// 	Body        string          `json:"body"`
+// }
+//
+// type FrontmatterData struct {
+// 	Title       string   `json:"title"`
+// 	Description string   `json:"description,omitempty"`
+// 	Tags        []string `json:"tags,omitempty"`
+// }
 
-type FrontmatterData struct {
+// NEW SIMPLIFIED STRUCT for "structured" (default) JSON output
+type SimplifiedStructuredOutput struct {
 	Title       string   `json:"title"`
 	Description string   `json:"description,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+	Body        string   `json:"body"`
 }
 
 // --- End structs for "structured" JSON output ---
@@ -57,13 +67,15 @@ You can specify the output format using the --output flag:
 		}
 
 		// Prepare slices for collecting multiple results for JSON array outputs
-		var structuredResults []StructuredGuidanceOutput
+		// var structuredResults []StructuredGuidanceOutput // OLD
+		var simplifiedStructuredResults []SimplifiedStructuredOutput // NEW
 		var jsonFrontmatterResults []JsonFrontmatterOnlyOutput
 
 		if len(idsToGet) > 1 {
 			switch outputFormatGet {
 			case "structured":
-				structuredResults = make([]StructuredGuidanceOutput, 0, len(idsToGet))
+				// structuredResults = make([]StructuredGuidanceOutput, 0, len(idsToGet)) // OLD
+				simplifiedStructuredResults = make([]SimplifiedStructuredOutput, 0, len(idsToGet)) // NEW
 			case "json-frontmatter":
 				jsonFrontmatterResults = make([]JsonFrontmatterOnlyOutput, 0, len(idsToGet))
 			}
@@ -72,7 +84,7 @@ You can specify the output format using the --output flag:
 		for i, id := range idsToGet {
 			slog.Debug("Attempting to get guidance from backend", "id", id, "format", outputFormatGet, "backend", backend.GetName())
 
-			contentBytes, _, err := backend.Read(id)
+			contentBytes, meta, err := backend.Read(id)
 			if err != nil {
 				slog.Error("Failed to read guidance from backend", "id", id, "backend", backend.GetName(), "error", err)
 				fmt.Fprintf(os.Stderr, "Error getting ID %s: %v\n", id, err)
@@ -80,7 +92,10 @@ You can specify the output format using the --output flag:
 				if len(idsToGet) > 1 {
 					switch outputFormatGet {
 					case "structured":
-						structuredResults = append(structuredResults, StructuredGuidanceOutput{ID: id, Body: "ERROR_FETCHING_CONTENT"})
+						// structuredResults = append(structuredResults, StructuredGuidanceOutput{ID: id, Body: "ERROR_FETCHING_CONTENT"}) // OLD
+						// For simplified output, we don't have an ID field directly.
+						// We'll add a placeholder with Title and Body.
+						simplifiedStructuredResults = append(simplifiedStructuredResults, SimplifiedStructuredOutput{Title: "ERROR_FETCHING_CONTENT_FOR_" + id, Body: "ERROR_FETCHING_CONTENT"}) // NEW
 					case "json-frontmatter":
 						jsonFrontmatterResults = append(jsonFrontmatterResults, JsonFrontmatterOnlyOutput{ID: id, Title: "ERROR_FETCHING_CONTENT"})
 					}
@@ -110,7 +125,8 @@ You can specify the output format using the --output flag:
 				if len(idsToGet) > 1 {
 					switch outputFormatGet {
 					case "structured":
-						structuredResults = append(structuredResults, StructuredGuidanceOutput{ID: id, Body: "ERROR_PARSING_CONTENT"})
+						// structuredResults = append(structuredResults, StructuredGuidanceOutput{ID: id, Body: "ERROR_PARSING_CONTENT"}) // OLD
+						simplifiedStructuredResults = append(simplifiedStructuredResults, SimplifiedStructuredOutput{Title: "ERROR_PARSING_CONTENT_FOR_" + id, Body: "ERROR_PARSING_CONTENT"}) // NEW
 					case "json-frontmatter":
 						jsonFrontmatterResults = append(jsonFrontmatterResults, JsonFrontmatterOnlyOutput{ID: id, Title: "ERROR_PARSING_CONTENT"})
 						// yaml-frontmatter and body also need parsing but don't collect into a single JSON array at the end
@@ -120,26 +136,38 @@ You can specify the output format using the --output flag:
 				continue
 			}
 
+			entity := model.Entity{
+				Alias:          id,
+				SourceBackend:  backend.GetName(),
+				Title:          parsedContent.Title,
+				Description:    parsedContent.Description,
+				Tags:           parsedContent.Tags,
+				CustomMetadata: meta, // Optionally filter meta fields
+				Body:           parsedContent.Body,
+			}
+			cid, _ := parsedContent.GetContentID()
+			entity.CID = cid
+
 			switch outputFormatGet {
 			case "structured":
-				// parseErr already handled above for this case
-				contentID, idErr := parsedContent.GetContentID()
-				if idErr != nil {
-					slog.Error("Failed to compute content ID", "source_id_arg", id, "error", idErr)
-					// Decide how to handle this - perhaps use a placeholder or the original id_arg?
-					contentID = "ERROR_COMPUTING_ID_" + id // Placeholder
-				}
-				structuredData := StructuredGuidanceOutput{
-					ID: contentID,
-					Frontmatter: FrontmatterData{
-						Title:       parsedContent.Title,
-						Description: parsedContent.Description,
-						Tags:        parsedContent.Tags,
-					},
-					Body: parsedContent.Body,
+				structuredData := struct {
+					Title       string   `json:"title"`
+					Description string   `json:"description,omitempty"`
+					Tags        []string `json:"tags,omitempty"`
+					Body        string   `json:"body"`
+				}{
+					Title:       entity.Title,
+					Description: entity.Description,
+					Tags:        entity.Tags,
+					Body:        entity.Body,
 				}
 				if len(idsToGet) > 1 {
-					structuredResults = append(structuredResults, structuredData)
+					simplifiedStructuredResults = append(simplifiedStructuredResults, SimplifiedStructuredOutput{
+						Title:       entity.Title,
+						Description: entity.Description,
+						Tags:        entity.Tags,
+						Body:        entity.Body,
+					})
 				} else {
 					jsonBytes, err := json.MarshalIndent(structuredData, "", "  ")
 					if err != nil {
@@ -150,17 +178,11 @@ You can specify the output format using the --output flag:
 					fmt.Fprintln(os.Stdout, string(jsonBytes))
 				}
 			case "json-frontmatter":
-				// parseErr already handled above for this case
-				contentID, idErr := parsedContent.GetContentID()
-				if idErr != nil {
-					slog.Error("Failed to compute content ID for json-frontmatter", "source_id_arg", id, "error", idErr)
-					contentID = "ERROR_COMPUTING_ID_" + id // Placeholder
-				}
 				jsonData := JsonFrontmatterOnlyOutput{
-					ID:          contentID,
-					Title:       parsedContent.Title,
-					Description: parsedContent.Description,
-					Tags:        parsedContent.Tags,
+					ID:          entity.CID,
+					Title:       entity.Title,
+					Description: entity.Description,
+					Tags:        entity.Tags,
 				}
 				if len(idsToGet) > 1 {
 					jsonFrontmatterResults = append(jsonFrontmatterResults, jsonData)
@@ -174,7 +196,6 @@ You can specify the output format using the --output flag:
 					fmt.Fprintln(os.Stdout, string(jsonBytes))
 				}
 			case "yaml-frontmatter": // Was "yaml"
-				// parseErr already handled above for this case
 				yamlBytes, err := parsedContent.MarshalFrontmatter() // This method produces YAML
 				if err != nil {
 					slog.Error("Failed to marshal frontmatter to YAML", "id", id, "error", err)
@@ -183,10 +204,8 @@ You can specify the output format using the --output flag:
 				}
 				fmt.Fprint(os.Stdout, string(yamlBytes))
 			case "body":
-				// parseErr already handled above for this case
-				fmt.Fprint(os.Stdout, parsedContent.Body)
-				// Ensure newline for consistent multi-output or single item display
-				if len(parsedContent.Body) > 0 && parsedContent.Body[len(parsedContent.Body)-1] != '\n' {
+				fmt.Fprint(os.Stdout, entity.Body)
+				if len(entity.Body) > 0 && entity.Body[len(entity.Body)-1] != '\n' {
 					fmt.Fprintln(os.Stdout)
 				}
 			default:
@@ -199,7 +218,7 @@ You can specify the output format using the --output flag:
 		if len(idsToGet) > 1 {
 			switch outputFormatGet {
 			case "structured":
-				finalJsonBytes, err := json.MarshalIndent(structuredResults, "", "  ")
+				finalJsonBytes, err := json.MarshalIndent(simplifiedStructuredResults, "", "  ") // NEW
 				if err != nil {
 					slog.Error("Failed to marshal final structured JSON array", "error", err)
 					return fmt.Errorf("marshalling final structured JSON array: %w", err)

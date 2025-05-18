@@ -1,31 +1,25 @@
 exit_code: 0
 stdout:
-  - match_type: JSON # Expect an array of JSON objects
+  - match_type: JSON
     content: |
       [
         {
-          "id": "376bedf5a6a50f20da59931dc04fd643b91415f7bf3d40d8e506b60f6700270c",
-          "frontmatter": {
-            "title": "Test Alpha Title",
-            "description": "Alpha Desc",
-            "tags": [
-              "alpha",
-              "common"
-            ]
-          },
+          "title": "Test Alpha Title",
+          "description": "Alpha Desc",
+          "tags": [
+            "alpha",
+            "common"
+          ],
           "body": "Body for Alpha."
         },
         {
-          "id": "a558cd54357be85d0b330c6851dfd8819e1c9d0e43ce6c4d19a38561f0be0566",
-          "frontmatter": {
-            "title": "Test Beta Title",
-            "description": "Beta Desc",
-            "tags": [
-              "beta",
-              "common"
-            ]
-          },
+          "title": "Test Beta Title",
+          "description": "Beta Desc",
+          "tags": [
+            "beta",
+            "common"
+          ],
           "body": "Body for Beta."
         }
       ]
-stderr: [] # Expect no stderr
+stderr: []

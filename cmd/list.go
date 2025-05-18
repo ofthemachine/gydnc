@@ -2,10 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+
 	// "log/slog" // For structured logging, if needed
 	"path/filepath" // Added for path resolution
 
 	"gydnc/config"
+	"gydnc/core/content"
+	"gydnc/model"
 	"gydnc/storage"         // Assuming storage.Backend is defined here
 	"gydnc/storage/localfs" // Added for localfs.NewStore
 
@@ -19,27 +23,31 @@ var listCmd = &cobra.Command{
 	Long: `Lists all available guidance entities across configured storage backends.
 Future enhancements may include filtering by backend or prefix.`,
 	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// slog.Debug("Starting 'list' command")
+	Run: func(cmd *cobra.Command, args []string) {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Fprintln(os.Stderr, "active backend not initialized; run 'gydnc init' or check config")
+				os.Exit(1)
+			}
+		}()
+		if config.GetLoadedConfigActualPath() == "" {
+			fmt.Fprintln(os.Stderr, "active backend not initialized; run 'gydnc init' or check config")
+			os.Exit(1)
+		}
 		cfg := config.Get()
-		cfgPath := config.GetLoadedConfigActualPath()
-
-		if cfgPath == "" {
-			// If no actual config file was loaded (cfgPath is empty), 'list' should fail
-			// as per the intent of tests like 'core/01_list_fails_no_config'.
-			// The error message is styled to match what the test expects.
-			return fmt.Errorf("active backend not initialized; run 'gydnc init' or check config")
+		if cfg == nil || len(cfg.StorageBackends) == 0 {
+			fmt.Fprintln(os.Stderr, "active backend not initialized; run 'gydnc init' or check config")
+			os.Exit(1)
 		}
-
-		if cfg == nil { // This check might be redundant if cfgPath == "" is caught first and Get() always returns something.
-			return fmt.Errorf("configuration not loaded")
+		_, err := config.GetActiveStorageBackend(cfg)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "active backend not initialized; run 'gydnc init' or check config")
+			os.Exit(1)
 		}
-
-		if len(cfg.StorageBackends) == 0 {
-			return fmt.Errorf("active backend not initialized; run 'gydnc init' or check config")
-		}
+		// slog.Debug("Starting 'list' command")
 
 		fmt.Println("Available guidance entities:")
+		var allEntities []model.Entity
 		foundEntities := 0
 
 		for backendName, backendConfigEntry := range cfg.StorageBackends { // Renamed backendConfig to backendConfigEntry for clarity
@@ -82,17 +90,40 @@ Future enhancements may include filtering by backend or prefix.`,
 			}
 
 			fmt.Printf("  Backend: %s (%s)\n", backendName, backendConfigEntry.Type)
-			for _, entityID := range entities { // entities is now []string
-				fmt.Printf("    - %s\n", entityID)
+			for _, entityID := range entities {
+				contentBytes, meta, readErr := currentBackend.Read(entityID)
+				if readErr != nil {
+					fmt.Printf("    - %s (error reading: %v)\n", entityID, readErr)
+					continue
+				}
+				parsed, parseErr := content.ParseG6E(contentBytes)
+				if parseErr != nil {
+					fmt.Printf("    - %s (error parsing: %v)\n", entityID, parseErr)
+					continue
+				}
+				entity := model.Entity{
+					Alias:          entityID,
+					SourceBackend:  backendName,
+					Title:          parsed.Title,
+					Description:    parsed.Description,
+					Tags:           parsed.Tags,
+					CustomMetadata: meta, // Optionally filter meta fields
+					Body:           parsed.Body,
+				}
+				cid, _ := parsed.GetContentID()
+				entity.CID = cid
+				allEntities = append(allEntities, entity)
 				foundEntities++
 			}
 		}
 
 		if foundEntities == 0 {
 			fmt.Println("No guidance entities found across all configured backends.")
+			return
 		}
-
-		return nil
+		for _, entity := range allEntities {
+			fmt.Printf("- %s (backend: %s) | title: %s | tags: %v\n", entity.Alias, entity.SourceBackend, entity.Title, entity.Tags)
+		}
 	},
 }
 

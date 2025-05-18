@@ -22,8 +22,8 @@ var rootCmd = &cobra.Command{
 	Long: `gydnc is a command-line interface for creating, managing, and retrieving
 guidance entities. It supports various backends and aims to provide
 a robust system for AI guidance versioning and discovery.`,
-	SilenceErrors: true,
-	SilenceUsage:  true,
+	SilenceErrors: false,
+	SilenceUsage:  false,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
@@ -34,7 +34,7 @@ a robust system for AI guidance versioning and discovery.`,
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err) // Use fmt.Fprintln to os.Stderr for errors
+		fmt.Fprintln(os.Stderr, err) // Print error to stderr
 		os.Exit(1)
 	}
 }
@@ -60,27 +60,23 @@ func init() {
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
-	// config.Load will handle the logic of checking cfgFile (from --config flag),
-	// then GYDNC_CONFIG env var, and then loading defaults if neither is present.
-	_, err := config.Load(cfgFile) // cfgFile is populated by the --config persistent flag
+	// Determine if the current command is 'init' or 'version' (bootstrap commands)
+	requireConfig := true
+	if len(os.Args) > 1 {
+		cmd := os.Args[1]
+		if cmd == "init" || cmd == "version" {
+			requireConfig = false
+		}
+	}
+	_, err := config.Load(cfgFile, requireConfig) // Pass requireConfig
 	if err != nil {
-		// config.Load now ensures globalConfig is set to default on error,
-		// and returns the error. We can just print it as a notice.
-		fmt.Fprintf(os.Stderr, "Notice: %v\n", err)
+		fmt.Fprintf(os.Stderr, "active backend not initialized; run 'gydnc init' or check config\n")
+		os.Exit(1)
 	}
 
 	// Initialize the active backend after loading the configuration.
 	// config.Get() should now be safe from panic.
 	if err := InitActiveBackend(); err != nil {
-		// An error here means the backend specified in the config could not be initialized.
-		// Some commands (like `version`, `init` itself, or `config view`) might still work
-		// if they don't strictly need an active backend or handle its absence.
-		// We print a warning but don't exit, allowing the CLI to proceed for commands
-		// that don't require a fully initialized backend.
 		fmt.Fprintf(os.Stderr, "Warning: could not initialize active backend: %v\n", err)
-		// For critical failures in InitActiveBackend for commands that *require* it,
-		// those commands should handle the nil activeBackend themselves.
-		// Removing os.Exit(1) here to allow commands like `config view` to run even if backend init fails.
-		// os.Exit(1) // Previously exited here
 	}
 }

@@ -243,3 +243,8 @@ func (s *Store) List(prefix string) ([]string, error) {
 
 	return results, nil
 }
+
+// Add IsWritable method to satisfy the new Backend interface
+func (s *Store) IsWritable() bool {
+	return true
+}
