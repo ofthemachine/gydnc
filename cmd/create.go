@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
+
 	// "log/slog" // To be used later
 	"os"
 	"path/filepath"
@@ -15,10 +17,12 @@ import (
 )
 
 var (
-	createTitle       string
-	createDescription string
-	createTags        []string
-	createBackend     string // Added for backend selection
+	createTitle        string
+	createDescription  string
+	createTags         []string
+	createBackend      string // Added for backend selection
+	createBodyFromFile string
+	createBody         string
 )
 
 // createCmd represents the create command
@@ -36,7 +40,14 @@ it is treated as a path relative to the default guidance store directory.
 The .g6e extension will be added if not present.
 
 The command will fail if the target file already exists.
-All necessary parent directories will be created.`,
+All necessary parent directories will be created.
+
+Body content can be provided via one of three methods (mutually exclusive):
+- Piping to stdin (e.g., echo "Body content" | gydnc create ...)
+- Using the --body flag (e.g., gydnc create ... --body "Body content")
+- Using the --body-from-file flag (e.g., gydnc create ... --body-from-file path/to/body.txt)
+
+If no body is provided, a default placeholder body will be generated.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		aliasOrPath := args[0]
@@ -98,7 +109,30 @@ All necessary parent directories will be created.`,
 			if chosenBackendConfig.LocalFS.Path == "" {
 				return fmt.Errorf("localfs backend '%s' is missing the 'path' setting", targetBackendName)
 			}
-			storeBasePath = chosenBackendConfig.LocalFS.Path
+
+			// Resolve storeBasePath relative to the config file's directory
+			rawPathFromConfig := chosenBackendConfig.LocalFS.Path
+			if !filepath.IsAbs(rawPathFromConfig) {
+				// GetLoadedConfigActualPath() can return an empty string if config was not loaded from a file
+				// (e.g. if default config is used or set via environment).
+				// In such cases, a relative path from config should be treated as relative to CWD.
+				loadedConfigPath := config.GetLoadedConfigActualPath()
+				if loadedConfigPath != "" {
+					configDir := filepath.Dir(loadedConfigPath)
+					storeBasePath = filepath.Join(configDir, rawPathFromConfig)
+				} else {
+					// If no config file path, treat relative path from config as relative to CWD
+					storeBasePath = rawPathFromConfig
+				}
+			} else {
+				storeBasePath = rawPathFromConfig
+			}
+			// Ensure storeBasePath is an absolute path for subsequent operations
+			var err error
+			storeBasePath, err = filepath.Abs(storeBasePath)
+			if err != nil {
+				return fmt.Errorf("failed to get absolute path for storeBasePath ('%s'): %w", storeBasePath, err)
+			}
 		default:
 			return fmt.Errorf("backend '%s' has an unsupported type '%s' for the create command", targetBackendName, chosenBackendConfig.Type)
 		}
@@ -147,6 +181,59 @@ All necessary parent directories will be created.`,
 			return fmt.Errorf("failed to create directory '%s': %w", targetDir, err)
 		}
 
+		var actualBodyContent string
+		var bodySourceUsed bool
+
+		// Check flags and stdin for body content
+		bodyFromFileFlagUsed := cmd.Flags().Changed("body-from-file")
+		bodyFlagUsed := cmd.Flags().Changed("body")
+
+		stat, _ := os.Stdin.Stat()
+		stdinIsPiped := (stat.Mode() & os.ModeCharDevice) == 0
+
+		sourcesProvided := 0
+		if bodyFromFileFlagUsed {
+			sourcesProvided++
+		}
+		if bodyFlagUsed {
+			sourcesProvided++
+		}
+		if stdinIsPiped {
+			sourcesProvided++
+		}
+
+		if sourcesProvided > 1 {
+			return fmt.Errorf("multiple body sources provided (--body-from-file, --body, stdin); please use only one")
+		}
+
+		if bodyFromFileFlagUsed {
+			bodyBytes, err := os.ReadFile(createBodyFromFile)
+			if err != nil {
+				return fmt.Errorf("failed to read body from file '%s': %w", createBodyFromFile, err)
+			}
+			actualBodyContent = string(bodyBytes)
+			bodySourceUsed = true
+		} else if bodyFlagUsed {
+			actualBodyContent = createBody
+			bodySourceUsed = true
+		} else if stdinIsPiped {
+			scanner := bufio.NewScanner(os.Stdin)
+			var lines []string
+			for scanner.Scan() {
+				lines = append(lines, scanner.Text())
+			}
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("error reading body from stdin: %w", err)
+			}
+
+			if len(lines) > 0 {
+				actualBodyContent = strings.Join(lines, "\n")
+			} else {
+				actualBodyContent = "" // Explicitly empty for empty stdin
+			}
+			bodySourceUsed = true // Considered used even if stdin was empty but piped
+		}
+
 		// Generate initial content
 		// newID := uuid.New().String() // Removed: ID is now content-addressable
 		title := createTitle
@@ -170,7 +257,13 @@ All necessary parent directories will be created.`,
 
 		// For the file content, we need the body.
 		// Use the title from the frontmatterData for consistency.
-		fileBodyContent := fmt.Sprintf("# %s\n\nGuidance content for '%s' goes here.\n", frontmatterData.Title, frontmatterData.Title)
+		var fileBodyContent string
+		if bodySourceUsed {
+			fileBodyContent = actualBodyContent
+		} else {
+			// Default placeholder body if no explicit body is provided
+			fileBodyContent = fmt.Sprintf("# %s\\n\\nGuidance content for '%s' goes here.\\n", frontmatterData.Title, frontmatterData.Title)
+		}
 
 		// The conceptual ID is now the SHA256 of fileBodyContent
 		// We can use the utils.Sha256 function here. For now, this is just a conceptual note.
@@ -184,14 +277,35 @@ All necessary parent directories will be created.`,
 
 		fileContent := append([]byte("---\n"), frontmatterBytes...)
 		fileContent = append(fileContent, []byte("---\n")...)
-		fileContent = append(fileContent, []byte(fileBodyContent)...)
+		// Ensure body ends with a newline if not empty, for consistency with ToFileContent()
+		if fileBodyContent != "" && !strings.HasSuffix(fileBodyContent, "\n") {
+			fileContent = append(fileContent, []byte(fileBodyContent+"\n")...)
+		} else {
+			fileContent = append(fileContent, []byte(fileBodyContent)...)
+		}
 
 		// Write file
 		if err := os.WriteFile(targetFilePath, fileContent, 0644); err != nil {
 			return fmt.Errorf("failed to write guidance file '%s': %w", targetFilePath, err)
 		}
 
-		fmt.Printf("Created guidance file: %s\n", targetFilePath)
+		// Get current working directory to make the output path relative
+		cwd, err := os.Getwd()
+		if err != nil {
+			// Fallback to absolute path if CWD cannot be determined, though unlikely.
+			fmt.Printf("Created guidance file: %s\n", targetFilePath)
+			// slog.Warn("Could not get CWD to make output path relative, printing absolute path", "error", err)
+		} else {
+			displayPath, relErr := filepath.Rel(cwd, targetFilePath)
+			if relErr != nil {
+				// Fallback to absolute path if Rel fails for some reason
+				fmt.Printf("Created guidance file: %s\n", targetFilePath)
+				// slog.Warn("Could not make target path relative to CWD, printing absolute path", "target", targetFilePath, "error", relErr)
+			} else {
+				fmt.Printf("Created guidance file: %s\n", displayPath)
+			}
+		}
+
 		// slog.Info("Successfully created guidance file", "path", targetFilePath)
 		return nil
 	},
@@ -206,6 +320,8 @@ func init() {
 	createCmd.Flags().StringVarP(&createDescription, "description", "d", "", "Description for the new guidance entity")
 	createCmd.Flags().StringSliceVarP(&createTags, "tags", "g", []string{}, "Comma-separated tags (e.g., tag1,category:value2)")
 	createCmd.Flags().StringVar(&createBackend, "backend", "", "Name of the storage backend to use (overrides default_backend from config)") // Added flag
+	createCmd.Flags().StringVar(&createBodyFromFile, "body-from-file", "", "Path to a file containing the body for the new guidance")
+	createCmd.Flags().StringVar(&createBody, "body", "", "Direct string content for the body of the new guidance")
 	// Example of how to use a StringArray flag if preferred over StringSlice for comma separation handling by Cobra
 	// createCmd.Flags().StringArrayVarP(&createTags, "tags", "g", []string{}, "Tags for the new guidance (can be specified multiple times)")
 }

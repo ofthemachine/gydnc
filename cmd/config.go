@@ -29,6 +29,14 @@ var configViewCmd = &cobra.Command{
 			return fmt.Errorf("configuration not loaded")
 		}
 
+		loadedPath := config.GetLoadedConfigActualPath()
+		if loadedPath != "" {
+			fmt.Printf("# Configuration loaded from: %s\n", loadedPath)
+		} else {
+			fmt.Println("# Configuration is using default values (not loaded from a file).")
+		}
+		fmt.Println("# ---") // Separator
+
 		yamlData, err := yaml.Marshal(cfg)
 		if err != nil {
 			slog.Error("Failed to marshal current config to YAML", "error", err)

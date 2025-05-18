@@ -11,5 +11,5 @@ SUBDIR_NAME="category"
 ./gydnc create --config "${SUBDIR_NAME}/.gydnc/config.yml" "${SUBDIR_NAME}/my-sub-guidance"
 
 # Optional: Display the created file for debugging (not asserted by default)
-echo "--- Content of ${SUBDIR_NAME}/.gydnc/my-sub-guidance.g6e: ---"
-cat "${SUBDIR_NAME}/.gydnc/my-sub-guidance.g6e"
+echo "--- Content of ${SUBDIR_NAME}/my-sub-guidance.g6e: ---"
+cat "${SUBDIR_NAME}/.gydnc/${SUBDIR_NAME}/my-sub-guidance.g6e"

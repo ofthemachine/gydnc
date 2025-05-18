@@ -2,22 +2,24 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      gydnc initialized successfully in
-      subdir_cfg_create
-      Created guidance file:
-      subdir_cfg_create/.gydnc/my-cfg-guidance.g6e
+      # REGEX: ^gydnc initialized successfully in /.*/subdir_cfg_create$
+      Created guidance file: subdir_cfg_create/.gydnc/my-cfg-guidance.g6e
 stderr: []
 filesystem:
-  - path: "subdir_cfg_create/config.yml"
+  - path: "subdir_cfg_create/.gydnc/config.yml"
     exists: true
-  - path: "subdir_cfg_create/TAG_ONTOLOGY.md"
+  - path: "subdir_cfg_create/.gydnc/TAG_ONTOLOGY.md"
     exists: true
   - path: "subdir_cfg_create/.gydnc"
     exists: true
     is_dir: true
   - path: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
+    exists: true
     match_type: ORDERED_LINES
     content: |
+      ---
       title: my-cfg-guidance
+      ---
       # my-cfg-guidance
+
       Guidance content for 'my-cfg-guidance' goes here.

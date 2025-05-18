@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	// "log/slog" // Removed for temporary debug setup
 	"os"
 
 	"gydnc/config"
@@ -39,6 +40,7 @@ func Execute() {
 }
 
 func init() {
+	// --- Temporary Slog Debug Setup WAS HERE --- REMOVED
 	cobra.OnInitialize(initConfig)
 
 	// Here you will define your flags and configuration settings.
@@ -62,24 +64,23 @@ func initConfig() {
 	// then GYDNC_CONFIG env var, and then loading defaults if neither is present.
 	_, err := config.Load(cfgFile) // cfgFile is populated by the --config persistent flag
 	if err != nil {
-		// It might be too early to fatal here. config.Load itself might return a default config
-		// and an error if a specific file wasn't found but defaults are usable.
-		// Or, some commands might not need a config file at all.
-		// For now, let's print the error if one occurs during explicit load attempt.
-		// Specific commands should check if the config they need is available.
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-		// Potentially os.Exit(1) if config is absolutely mandatory for all operations from the start,
-		// but many CLIs allow some operations without full config.
+		// config.Load now ensures globalConfig is set to default on error,
+		// and returns the error. We can just print it as a notice.
+		fmt.Fprintf(os.Stderr, "Notice: %v\n", err)
 	}
 
 	// Initialize the active backend after loading the configuration.
+	// config.Get() should now be safe from panic.
 	if err := InitActiveBackend(); err != nil {
 		// An error here means the backend specified in the config could not be initialized.
-		// Some commands (like `version`, `init` itself, or `config view`) might still work.
-		// Other commands that rely on a backend will fail later if GetActiveBackend() returns nil
-		// or if they try to use a non-functional backend.
+		// Some commands (like `version`, `init` itself, or `config view`) might still work
+		// if they don't strictly need an active backend or handle its absence.
 		// We print a warning but don't exit, allowing the CLI to proceed for commands
 		// that don't require a fully initialized backend.
 		fmt.Fprintf(os.Stderr, "Warning: could not initialize active backend: %v\n", err)
+		// For critical failures in InitActiveBackend for commands that *require* it,
+		// those commands should handle the nil activeBackend themselves.
+		// Removing os.Exit(1) here to allow commands like `config view` to run even if backend init fails.
+		// os.Exit(1) // Previously exited here
 	}
 }

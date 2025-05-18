@@ -1,0 +1,2 @@
+This is body content from a file.
+It has multiple lines.

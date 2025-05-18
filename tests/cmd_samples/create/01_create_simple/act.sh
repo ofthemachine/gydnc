@@ -9,5 +9,5 @@ set -e # Exit on first error
 GYDNC_CONFIG=.gydnc/config.yml ./gydnc create my-new-guidance
 
 # Optional: Display the created file for debugging (not asserted by default)
-echo "--- Content of .gydnc/my-new-guidance.g6e: ---"
+echo "--- Content of my-new-guidance.g6e: ---"
 cat .gydnc/my-new-guidance.g6e

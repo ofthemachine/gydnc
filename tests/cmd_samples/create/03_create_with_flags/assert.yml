@@ -2,18 +2,35 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      gydnc initialized successfully in
-      Created guidance file:
-      .gydnc/flagged-guidance.g6e
+      # REGEX: ^Created guidance store: .*/.gydnc$
+      # REGEX: ^Created TAG_ONTOLOGY.md: .*/.gydnc/TAG_ONTOLOGY.md$
+      # REGEX: ^Created configuration file: .*/.gydnc/config.yml$
+      # REGEX: ^gydnc initialized successfully in .*$
+      # REGEX: ^$
+      # REGEX: ^To activate this configuration for your current session, you can run:$
+      # REGEX: ^\s*export GYDNC_CONFIG=".*"$
+      # REGEX: ^Consider adding this line to your shell configuration file \(e.g., ~/.zshrc or ~/.bashrc\) for persistent use.$
+      Created guidance file: .gydnc/flagged-guidance.g6e
+      --- Content of .gydnc/flagged-guidance.g6e: ---
+      ---
+      title: Flagged Guidance
+      description: Created with flags
+      tags:
+          - flag
+          - cli
+      ---
+      # Flagged Guidance\n\nGuidance content for 'Flagged Guidance' goes here.\n
 stderr: []
 filesystem:
-  - path: ".gydnc/flagged-guidance.g6e"
-    match_type: ORDERED_LINES
+  - path: .gydnc/flagged-guidance.g6e
+    exists: true
+    content_match_type: EXACT
     content: |
-      title: Flagged Guidance Title
-      description: Description from flag
+      ---
+      title: Flagged Guidance
+      description: Created with flags
       tags:
-      - flag:tag1
-      - category:flag_cat
-      # Flagged Guidance Title
-      Guidance content for 'Flagged Guidance Title' goes here.
+          - flag
+          - cli
+      ---
+      # Flagged Guidance\n\nGuidance content for 'Flagged Guidance' goes here.\n

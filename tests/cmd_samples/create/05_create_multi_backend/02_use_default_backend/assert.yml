@@ -5,13 +5,11 @@ stdout:
       Created guidance file: .store_primary/multi_backend/default_be_test_entity.g6e
 stderr: []
 filesystem:
-  - path: ".store_secondary/multi_backend/default_be_test_entity.g6e"
-    exists: false
-  - path: ".store_primary/multi_backend/default_be_test_entity.g6e"
-    match_type: ORDERED_LINES
+  - path: .store_primary/multi_backend/default_be_test_entity.g6e
+    exists: true
+    content_match_type: EXACT
     content: |
       ---
       title: Default Backend Test
       ---
-      # Default Backend Test
-      Guidance content for 'Default Backend Test' goes here.
+      # Default Backend Test\n\nGuidance content for 'Default Backend Test' goes here.\n

@@ -1,0 +1,20 @@
+exit_code: 0
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      Created guidance file: .gydnc/flag_test.g6e
+      --- Content of .gydnc/flag_test.g6e: ---
+      ---
+      title: Flag Test Title
+      ---
+      This is body content from the --body flag.
+stderr: []
+filesystem:
+  - path: .gydnc/flag_test.g6e
+    exists: true
+    content_match_type: EXACT
+    content: |
+      ---
+      title: Flag Test Title
+      ---
+      This is body content from the --body flag.

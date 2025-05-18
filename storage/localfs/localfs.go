@@ -3,6 +3,7 @@ package localfs
 import (
 	"fmt"
 	"io/fs"
+	"log/slog" // Standard library slog
 	"os"
 	"path/filepath"
 	"strings"
@@ -213,7 +214,7 @@ func (s *Store) Stat(id string) (map[string]interface{}, error) {
 // If prefix is empty, it lists all entities in the backend.
 // Returns a list of IDs (strings) and conforms to the updated storage.Backend interface.
 func (s *Store) List(prefix string) ([]string, error) {
-	// slog.Debug("Listing files in store", "basePath", s.basePath, "prefix", prefix)
+	slog.Debug("[localfs.List] Called with store basePath", "s.basePath", s.basePath, "prefix", prefix)
 	var results []string
 
 	err := filepath.WalkDir(s.basePath, func(path string, d fs.DirEntry, err error) error {

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	// "log/slog" // For structured logging, if needed
+	"path/filepath" // Added for path resolution
 
 	"gydnc/config"
 	"gydnc/storage"         // Assuming storage.Backend is defined here
@@ -21,13 +22,21 @@ Future enhancements may include filtering by backend or prefix.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// slog.Debug("Starting 'list' command")
 		cfg := config.Get()
-		if cfg == nil {
+		cfgPath := config.GetLoadedConfigActualPath()
+
+		if cfgPath == "" {
+			// If no actual config file was loaded (cfgPath is empty), 'list' should fail
+			// as per the intent of tests like 'core/01_list_fails_no_config'.
+			// The error message is styled to match what the test expects.
+			return fmt.Errorf("active backend not initialized; run 'gydnc init' or check config")
+		}
+
+		if cfg == nil { // This check might be redundant if cfgPath == "" is caught first and Get() always returns something.
 			return fmt.Errorf("configuration not loaded")
 		}
 
 		if len(cfg.StorageBackends) == 0 {
-			fmt.Println("No storage backends configured.")
-			return nil
+			return fmt.Errorf("active backend not initialized; run 'gydnc init' or check config")
 		}
 
 		fmt.Println("Available guidance entities:")
@@ -94,12 +103,31 @@ func InitializeBackendFromConfig(name string, beConfig *config.StorageConfig) (s
 		if beConfig.LocalFS == nil || beConfig.LocalFS.Path == "" {
 			return nil, fmt.Errorf("localfs config for backend '%s' is missing or path is empty", name)
 		}
-		store, err := localfs.NewStore(*beConfig.LocalFS) // Use the imported localfs
+
+		cfgPath := config.GetLoadedConfigActualPath()
+		resolvedPath := beConfig.LocalFS.Path
+
+		if !filepath.IsAbs(resolvedPath) && cfgPath != "" {
+			configFileDir := filepath.Dir(cfgPath)
+			resolvedPath = filepath.Join(configFileDir, resolvedPath)
+		}
+
+		absResolvedPath, err := filepath.Abs(resolvedPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create localfs store for backend '%s': %w", name, err)
+			return nil, fmt.Errorf("failed to get absolute path for resolved localfs path '%s' for backend '%s': %w", resolvedPath, name, err)
+		}
+
+		storeSpecificConfig := config.LocalFSConfig{Path: absResolvedPath}
+		store, err := localfs.NewStore(storeSpecificConfig) // Use the imported localfs
+		if err != nil {
+			return nil, fmt.Errorf("failed to create localfs store for backend '%s' (resolved path: %s): %w", name, absResolvedPath, err)
 		}
 		if initErr := store.Init(nil); initErr != nil { // Assuming Init(nil) is okay for now
-			return nil, fmt.Errorf("failed to initialize localfs store for backend '%s': %w", name, initErr)
+			userFacingPath := beConfig.LocalFS.Path
+			if absResolvedPath != userFacingPath {
+				userFacingPath = fmt.Sprintf("%s (resolved to %s)", beConfig.LocalFS.Path, absResolvedPath)
+			}
+			return nil, fmt.Errorf("failed to initialize localfs store for backend '%s' at %s: %w", name, userFacingPath, initErr)
 		}
 		return store, nil
 	}

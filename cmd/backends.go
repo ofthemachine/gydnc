@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"      // Standard library slog
 	"path/filepath" // Import filepath
 
 	"gydnc/config"
@@ -17,6 +18,8 @@ var activeBackendName string // Store the name of the active backend
 func InitActiveBackend() error {
 	cfg := config.Get()
 	cfgPath := config.GetLoadedConfigActualPath() // Use the new correct function
+
+	slog.Debug("[InitActiveBackend] Loaded config path reported by config package", "cfgPath", cfgPath)
 
 	backendN := cfg.DefaultBackend
 	if backendN == "" {
@@ -41,7 +44,7 @@ func InitActiveBackend() error {
 	if storageCfg.Type != "localfs" {
 		activeBackend = nil // Ensure it's nil if not usable
 		activeBackendName = ""
-		return fmt.Errorf("default backend '%s' is of type '%s', but only 'localfs' is supported in MVP", backendN, storageCfg.Type)
+		return fmt.Errorf("backend '%s' has an unsupported type '%s' for the create command", backendN, storageCfg.Type)
 	}
 
 	if storageCfg.LocalFS == nil {
@@ -52,9 +55,12 @@ func InitActiveBackend() error {
 
 	// Resolve the LocalFS path: if relative, it's relative to the config file's directory.
 	resolvedPath := storageCfg.LocalFS.Path
+	slog.Debug("[InitActiveBackend] Initial resolvedPath from storageCfg.LocalFS.Path", "resolvedPath", resolvedPath)
+
 	if !filepath.IsAbs(resolvedPath) && cfgPath != "" {
 		configFileDir := filepath.Dir(cfgPath)
 		resolvedPath = filepath.Join(configFileDir, resolvedPath)
+		slog.Debug("[InitActiveBackend] Path resolved relative to config file dir", "configFileDir", configFileDir, "newResolvedPath", resolvedPath)
 	}
 	// Make it absolute for the store, as the store expects an absolute base path.
 	absResolvedPath, err := filepath.Abs(resolvedPath)
@@ -63,6 +69,7 @@ func InitActiveBackend() error {
 		activeBackendName = ""
 		return fmt.Errorf("failed to get absolute path for resolved localfs path '%s': %w", resolvedPath, err)
 	}
+	slog.Debug("[InitActiveBackend] Final absolute resolved path for store", "absResolvedPath", absResolvedPath)
 
 	// Create a new LocalFSConfig with the resolved absolute path for the store
 	// This is crucial because NewStore and the Store itself expect/work with an absolute basePath

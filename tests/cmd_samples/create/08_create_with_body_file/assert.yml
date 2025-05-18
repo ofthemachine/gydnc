@@ -1,0 +1,22 @@
+exit_code: 0
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      Created guidance file: .gydnc/file_test.g6e
+      --- Content of .gydnc/file_test.g6e: ---
+      ---
+      title: File Test Title
+      ---
+      This is body content from a file.
+      It has multiple lines.
+stderr: []
+filesystem:
+  - path: .gydnc/file_test.g6e
+    exists: true
+    content_match_type: EXACT # Exact match including newlines from file
+    content: |
+      ---
+      title: File Test Title
+      ---
+      This is body content from a file.
+      It has multiple lines.

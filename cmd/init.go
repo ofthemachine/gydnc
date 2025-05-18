@@ -22,7 +22,7 @@ const (
 	// defaultStoreSubDirName is no longer used as .gydnc is the store
 	// defaultTagOntologyInDirFile is no longer used, it's at the root
 	defaultTagOntologyFileName = "TAG_ONTOLOGY.md"
-	defaultBackendName         = "defaultLocal"
+	defaultBackendName         = "default_local"
 )
 
 var initCmd = &cobra.Command{

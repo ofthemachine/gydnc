@@ -1,19 +1,23 @@
 exit_code: 0
 stdout:
-  - match_type: ORDERED_LINES
-    content: |
-      Updated guidance: .gydnc/update_target_01.g6e
-stderr: []
+  - match_type: REGEX
+    content: "^Updated guidance: .*/.gydnc/update_target_01.g6e\n?$"
+stderr: [] # If update command fails and exits, grep won't run or its stderr won't be primary.
+          # If grep fails to find the line but `|| true` is used, act.sh stdout is empty.
+          # If `gydnc update` prints to stderr, it's captured in UPDATE_STDOUT_STDERR but not asserted here if exit_code is 0.
 filesystem:
   - path: .gydnc/update_target_01.g6e
-    match_type: ORDERED_LINES
+    exists: true
+    content_match_type: EXACT
     content: |
       ---
-      title: Updated Title for 01
-      description: Original Description
+      title: New Title for Update 01 # This is what act.sh sets
+      description: Original Description # This should be preserved
       tags:
-          - common
-          - tag1
+          - original # This should be preserved
+          - test     # This should be preserved
       ---
       # Original Title 01
-      Guidance content for 'Original Title 01' goes here.
+
+      This is the original body content.
+      It might span multiple lines.

@@ -46,10 +46,18 @@ type Config struct {
 // NewDefaultConfig creates a config with some default values.
 // This might be used if no config file is found.
 func NewDefaultConfig() *Config {
-	return &Config{
-		// DefaultBackend: "defaultLocal", // Example, might require a defaultLocal to be defined
+	defaultBackendName := "implicit_cwd_store" // Name for the implicitly created backend
+	cfg := &Config{
+		DefaultBackend:  defaultBackendName,
 		StorageBackends: make(map[string]*StorageConfig),
 	}
+	cfg.StorageBackends[defaultBackendName] = &StorageConfig{
+		Type: "localfs",
+		LocalFS: &LocalFSConfig{
+			Path: ".", // Point to the current working directory
+		},
+	}
+	return cfg
 }
 
 // Load reads the configuration from the specified path or environment variable.
@@ -75,26 +83,38 @@ func Load(cliConfigPath string) (*Config, error) {
 		}
 	}
 
-	loadedConfigActualPath = configFilePath // Store the determined path
-
 	if configFilePath == "" {
+		slog.Debug("No configuration file path specified or found, using default configuration.")
 		cfg := NewDefaultConfig()
 		globalConfig = cfg
+		loadedConfigActualPath = "" // Explicitly clear if using default
 		return cfg, nil
 	}
 
 	slog.Debug("Attempting to load configuration from", "path", configFilePath)
+	loadedConfigActualPath = configFilePath // Store path *before* attempting to read
+
 	data, err := os.ReadFile(configFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file %s: %w", configFilePath, err)
+		slog.Warn("Failed to read config file, using default configuration.", "path", configFilePath, "error", err)
+		cfg := NewDefaultConfig()
+		globalConfig = cfg
+		loadedConfigActualPath = "" // Using defaults, so no "actual loaded path"
+		return cfg, fmt.Errorf("failed to read config file %s: %w. Using default config", configFilePath, err)
 	}
 
-	cfg, err := LoadConfigFromString(string(data))
+	cfgFromFile, err := LoadConfigFromString(string(data))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse config file %s: %w", configFilePath, err)
+		slog.Warn("Failed to parse config file, using default configuration.", "path", configFilePath, "error", err)
+		cfg := NewDefaultConfig()
+		globalConfig = cfg
+		loadedConfigActualPath = "" // Using defaults, so no "actual loaded path"
+		return cfg, fmt.Errorf("failed to parse config file %s: %w. Using default config", configFilePath, err)
 	}
-	globalConfig = cfg
-	return cfg, nil
+
+	globalConfig = cfgFromFile
+	// loadedConfigActualPath was already set to configFilePath if we reached here successfully.
+	return cfgFromFile, nil
 }
 
 // LoadConfigFromString parses configuration data from a string (useful for testing).

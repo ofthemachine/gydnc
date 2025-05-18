@@ -1,0 +1,10 @@
+exit_code: 1 # Command itself should fail
+stdout:
+  - match_type: SUBSTRING # Or ORDERED_LINES if you echo a specific success message
+    content: "Command failed as expected" # From the act.sh script on failure
+stderr:
+  - match_type: SUBSTRING
+    content: "multiple body sources provided (--body-from-file, --body, stdin); please use only one"
+filesystem: # Check that the file was NOT created
+  - path: .gydnc/multi_source_test.g6e
+    exists: false

@@ -4,12 +4,15 @@ set -e # Exit on first error
 # Initialize gydnc in the current directory
 ./gydnc init .
 
+# Set config for all commands after init
+export GYDNC_CONFIG=.gydnc/config.yml
+
 # Create a new guidance file
-GYDNC_CONFIG=.gydnc/config.yml ./gydnc create existing-guidance
+./gydnc create existing-guidance
 
 # Try to create the same file again (should fail)
 set +e # Allow failure for this command
-GYDNC_CONFIG=.gydnc/config.yml ./gydnc create existing-guidance
+./gydnc create existing-guidance
 SECOND_EXIT_CODE=$?
 set -e
 

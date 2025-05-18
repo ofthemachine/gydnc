@@ -1,0 +1,20 @@
+exit_code: 0
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      Created guidance file: .gydnc/stdin_test.g6e
+      --- Content of .gydnc/stdin_test.g6e: ---
+      ---
+      title: Stdin Test Title
+      ---
+      This is body content from stdin.
+stderr: []
+filesystem:
+  - path: .gydnc/stdin_test.g6e
+    exists: true
+    content_match_type: EXACT
+    content: |
+      ---
+      title: Stdin Test Title
+      ---
+      This is body content from stdin.

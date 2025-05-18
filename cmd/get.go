@@ -46,8 +46,7 @@ You can specify the output format using the --output flag:
 - structured (default): Displays ID, parsed frontmatter, and body as a JSON object (or array).
 - json-frontmatter: Displays only ID and parsed frontmatter as a JSON object (or array).
 - yaml-frontmatter: Displays only parsed frontmatter as YAML.
-- body: Displays only the Markdown body content.
-- raw: Displays the raw file content as returned by the backend (includes frontmatter and body delimiters).`,
+- body: Displays only the Markdown body content.`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		idsToGet := args
@@ -97,8 +96,8 @@ You can specify the output format using the --output flag:
 					} else {
 						fmt.Fprintf(os.Stdout, "\n--- Content for ID: %s ---\n", id)
 					}
-				} else if len(idsToGet) > 1 && i == 0 && outputFormatGet != "yaml-frontmatter" && outputFormatGet != "raw" {
-					// Header for first item in non-yaml/raw multi-item output
+				} else if len(idsToGet) > 1 && i == 0 && outputFormatGet != "yaml-frontmatter" {
+					// Header for first item in non-yaml multi-item output
 					fmt.Fprintf(os.Stdout, "--- Content for ID: %s ---\n", id)
 				}
 			}
@@ -117,11 +116,8 @@ You can specify the output format using the --output flag:
 						// yaml-frontmatter and body also need parsing but don't collect into a single JSON array at the end
 					}
 				}
-				// For raw, we don't parse, so we don't hit this error before the switch.
-				// For formats that need parsing, continue to next ID if parse fails.
-				if outputFormatGet != "raw" {
-					continue
-				}
+				// Since all remaining formats require parsing, if parsing fails, continue to the next ID.
+				continue
 			}
 
 			switch outputFormatGet {
@@ -186,14 +182,6 @@ You can specify the output format using the --output flag:
 					continue
 				}
 				fmt.Fprint(os.Stdout, string(yamlBytes))
-			case "raw": // "full" is an alias for raw conceptually, just print bytes
-				// No parsing needed for raw, so parseErr check above is skipped for this case by design.
-				fmt.Fprint(os.Stdout, string(contentBytes))
-				// Ensure newline for consistent multi-output or single item display
-				if len(contentBytes) > 0 && contentBytes[len(contentBytes)-1] != '\n' {
-					fmt.Fprintln(os.Stdout)
-				}
-
 			case "body":
 				// parseErr already handled above for this case
 				fmt.Fprint(os.Stdout, parsedContent.Body)
@@ -203,7 +191,7 @@ You can specify the output format using the --output flag:
 				}
 			default:
 				slog.Error("Unknown output format specified", "format", outputFormatGet)
-				return fmt.Errorf("unknown output format: %s. Valid formats are: structured, json-frontmatter, yaml-frontmatter, body, raw", outputFormatGet)
+				return fmt.Errorf("unknown output format: %s. Valid formats are: structured, json-frontmatter, yaml-frontmatter, body", outputFormatGet)
 			}
 		}
 
@@ -232,5 +220,5 @@ You can specify the output format using the --output flag:
 
 func init() {
 	rootCmd.AddCommand(getCmd)
-	getCmd.Flags().StringVarP(&outputFormatGet, "output", "o", "structured", "Output format (structured, json-frontmatter, yaml-frontmatter, body, raw)")
+	getCmd.Flags().StringVarP(&outputFormatGet, "output", "o", "structured", "Output format (structured, json-frontmatter, yaml-frontmatter, body)")
 }

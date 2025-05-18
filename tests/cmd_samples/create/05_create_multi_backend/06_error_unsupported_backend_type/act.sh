@@ -10,3 +10,4 @@ EXIT_CODE=$?
 set -e
 
 echo "Create attempt exit code: $EXIT_CODE"
+exit $EXIT_CODE

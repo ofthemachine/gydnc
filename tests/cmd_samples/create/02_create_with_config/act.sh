@@ -13,7 +13,7 @@ mkdir -p "${SUBDIR_NAME}"
 
 # Create a new guidance file using the config file in the subdirectory
 # This will now be created at SUBDIR_NAME/.gydnc/my-cfg-guidance.g6e
-./gydnc create --config "${SUBDIR_NAME}/config.yml" my-cfg-guidance
+./gydnc create --config "${SUBDIR_NAME}/.gydnc/config.yml" my-cfg-guidance
 
 # Optional: Display the created file for debugging (not asserted by default)
 echo "--- Content of ${SUBDIR_NAME}/.gydnc/my-cfg-guidance.g6e: ---"

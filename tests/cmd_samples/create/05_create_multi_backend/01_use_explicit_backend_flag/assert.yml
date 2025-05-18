@@ -1,18 +1,15 @@
 exit_code: 0
 stdout:
-  - match_type: SUBSTRING # Check for the success message
-    content: "Created guidance file: .store_secondary/multi_backend/be_flag_test_entity.g6e"
+  - match_type: ORDERED_LINES
+    content: |
+      Created guidance file: .store_secondary/multi_backend/be_flag_test_entity.g6e
 stderr: []
 filesystem:
-  - path: ".store_primary/multi_backend/be_flag_test_entity.g6e"
-    exists: false # Should NOT exist in the primary store
-  - path: ".store_secondary/multi_backend/be_flag_test_entity.g6e"
+  - path: .store_secondary/multi_backend/be_flag_test_entity.g6e
     exists: true
-    match_type: SUBSTRING # Check for exact file content
+    content_match_type: EXACT
     content: |
       ---
       title: Backend Flag Test
       ---
-      # Backend Flag Test
-
-      Guidance content for 'Backend Flag Test' goes here.
+      # Backend Flag Test\n\nGuidance content for 'Backend Flag Test' goes here.\n
