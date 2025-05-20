@@ -6,6 +6,7 @@ import (
 	// "encoding/hex"  // No longer needed directly
 	"errors"
 	"fmt"
+	"strings"
 
 	"gydnc/internal/utils" // Added import for our utils package
 
@@ -102,7 +103,11 @@ func (gc *GuidanceContent) ToFileContent() ([]byte, error) {
 		buffer.WriteString(delimiterNewLine)
 	}
 	buffer.WriteString(frontmatterDelimiter + delimiterNewLine)
-	buffer.WriteString(gc.Body)
+	body := gc.Body
+	if body != "" && !strings.HasSuffix(body, "\n") {
+		body += "\n"
+	}
+	buffer.WriteString(body)
 
 	return buffer.Bytes(), nil
 }

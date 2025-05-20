@@ -1,13 +1,13 @@
 #!/bin/bash
-set -e # Exit on first error
+set -euo pipefail
 
-# Initialize gydnc in the current directory (which will be the temp test directory)
-./gydnc init .
+# Arrange: initialize and create a simple guidance entity
+./gydnc init > /dev/null
+export GYDNC_CONFIG="$(pwd)/.gydnc/config.yml"
+cat <<EOF | ./gydnc create my-new-guidance --title "my-new-guidance" > /dev/null
+# my-new-guidance
 
-# Create a new guidance file
-# This will now be created at .gydnc/my-new-guidance.g6e
-GYDNC_CONFIG=.gydnc/config.yml ./gydnc create my-new-guidance
+Guidance content for 'my-new-guidance' goes here.
+EOF
 
-# Optional: Display the created file for debugging (not asserted by default)
-echo "--- Content of my-new-guidance.g6e: ---"
-cat .gydnc/my-new-guidance.g6e
+./gydnc get my-new-guidance

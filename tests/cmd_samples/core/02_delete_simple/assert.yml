@@ -1,0 +1,11 @@
+exit_code: 0
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      Deleted:
+      - simple-delete-test (backend: default_local)
+      Available guidance entities:
+      No guidance entities found across all configured backends.
+stderr:
+  - match_type: ORDERED_LINES
+    content: ""

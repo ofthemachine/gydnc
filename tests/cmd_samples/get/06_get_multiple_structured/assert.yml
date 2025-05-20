@@ -10,7 +10,7 @@ stdout:
             "alpha",
             "common"
           ],
-          "body": "Body for Alpha."
+          "body": "Body for Alpha.\n"
         },
         {
           "title": "Test Beta Title",
@@ -19,7 +19,7 @@ stdout:
             "beta",
             "common"
           ],
-          "body": "Body for Beta."
+          "body": "Body for Beta.\n"
         }
       ]
 stderr: []

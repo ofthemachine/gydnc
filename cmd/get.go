@@ -40,7 +40,7 @@ type SimplifiedStructuredOutput struct {
 
 // Helper struct for "json-frontmatter" output (was jsonFrontmatterOutput)
 type JsonFrontmatterOnlyOutput struct {
-	ID          string   `json:"id"`
+	// ID          string   `json:"id"` // Removed: do not output 'id' in json-frontmatter mode
 	Title       string   `json:"title"`
 	Description string   `json:"description,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
@@ -66,22 +66,19 @@ You can specify the output format using the --output flag:
 			return fmt.Errorf("active backend not initialized; run 'gydnc init' or check config")
 		}
 
-		// Prepare slices for collecting multiple results for JSON array outputs
-		// var structuredResults []StructuredGuidanceOutput // OLD
 		var simplifiedStructuredResults []SimplifiedStructuredOutput // NEW
 		var jsonFrontmatterResults []JsonFrontmatterOnlyOutput
 
 		if len(idsToGet) > 1 {
 			switch outputFormatGet {
 			case "structured":
-				// structuredResults = make([]StructuredGuidanceOutput, 0, len(idsToGet)) // OLD
 				simplifiedStructuredResults = make([]SimplifiedStructuredOutput, 0, len(idsToGet)) // NEW
 			case "json-frontmatter":
 				jsonFrontmatterResults = make([]JsonFrontmatterOnlyOutput, 0, len(idsToGet))
 			}
 		}
 
-		for i, id := range idsToGet {
+		for _, id := range idsToGet {
 			slog.Debug("Attempting to get guidance from backend", "id", id, "format", outputFormatGet, "backend", backend.GetName())
 
 			contentBytes, meta, err := backend.Read(id)
@@ -92,29 +89,12 @@ You can specify the output format using the --output flag:
 				if len(idsToGet) > 1 {
 					switch outputFormatGet {
 					case "structured":
-						// structuredResults = append(structuredResults, StructuredGuidanceOutput{ID: id, Body: "ERROR_FETCHING_CONTENT"}) // OLD
-						// For simplified output, we don't have an ID field directly.
-						// We'll add a placeholder with Title and Body.
 						simplifiedStructuredResults = append(simplifiedStructuredResults, SimplifiedStructuredOutput{Title: "ERROR_FETCHING_CONTENT_FOR_" + id, Body: "ERROR_FETCHING_CONTENT"}) // NEW
 					case "json-frontmatter":
-						jsonFrontmatterResults = append(jsonFrontmatterResults, JsonFrontmatterOnlyOutput{ID: id, Title: "ERROR_FETCHING_CONTENT"})
+						jsonFrontmatterResults = append(jsonFrontmatterResults, JsonFrontmatterOnlyOutput{Title: "ERROR_FETCHING_CONTENT"})
 					}
 				}
 				continue
-			}
-
-			// Separators for multi-output non-JSON array formats
-			if outputFormatGet != "structured" && outputFormatGet != "json-frontmatter" {
-				if len(idsToGet) > 1 && i > 0 {
-					if outputFormatGet == "yaml-frontmatter" {
-						fmt.Fprintln(os.Stdout, "---")
-					} else {
-						fmt.Fprintf(os.Stdout, "\n--- Content for ID: %s ---\n", id)
-					}
-				} else if len(idsToGet) > 1 && i == 0 && outputFormatGet != "yaml-frontmatter" {
-					// Header for first item in non-yaml multi-item output
-					fmt.Fprintf(os.Stdout, "--- Content for ID: %s ---\n", id)
-				}
 			}
 
 			parsedContent, parseErr := content.ParseG6E(contentBytes)
@@ -125,10 +105,9 @@ You can specify the output format using the --output flag:
 				if len(idsToGet) > 1 {
 					switch outputFormatGet {
 					case "structured":
-						// structuredResults = append(structuredResults, StructuredGuidanceOutput{ID: id, Body: "ERROR_PARSING_CONTENT"}) // OLD
 						simplifiedStructuredResults = append(simplifiedStructuredResults, SimplifiedStructuredOutput{Title: "ERROR_PARSING_CONTENT_FOR_" + id, Body: "ERROR_PARSING_CONTENT"}) // NEW
 					case "json-frontmatter":
-						jsonFrontmatterResults = append(jsonFrontmatterResults, JsonFrontmatterOnlyOutput{ID: id, Title: "ERROR_PARSING_CONTENT"})
+						jsonFrontmatterResults = append(jsonFrontmatterResults, JsonFrontmatterOnlyOutput{Title: "ERROR_PARSING_CONTENT"})
 						// yaml-frontmatter and body also need parsing but don't collect into a single JSON array at the end
 					}
 				}
@@ -179,7 +158,7 @@ You can specify the output format using the --output flag:
 				}
 			case "json-frontmatter":
 				jsonData := JsonFrontmatterOnlyOutput{
-					ID:          entity.CID,
+					// ID:          entity.CID, // Removed: do not output 'id' in json-frontmatter mode
 					Title:       entity.Title,
 					Description: entity.Description,
 					Tags:        entity.Tags,
@@ -233,6 +212,8 @@ You can specify the output format using the --output flag:
 				fmt.Fprintln(os.Stdout, string(finalJsonBytes))
 			}
 		}
+
+		// Do not print any entity list, summary, or extra output after the JSON/YAML/body output.
 		return nil
 	},
 }

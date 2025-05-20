@@ -9,7 +9,7 @@ stdout:
           "common",
           "tag1"
         ],
-        "body": "# Original Title 01\\n\\nGuidance content for 'Original Title 01' goes here.\\n\n"
+        "body": "# Original Title 01\n\nGuidance content for 'Original Title 01' goes here.\n"
       }
 stderr: [] # If update command fails and exits, grep won't run or its stderr won't be primary.
           # If grep fails to find the line but `|| true` is used, act.sh stdout is empty.

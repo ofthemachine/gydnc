@@ -3,7 +3,6 @@ stdout:
   - match_type: JSON
     content: |
       {
-        "id": "9675fda147a1b1dc05bc59d802d33c2c3fb6c9f43eba8db46d95b1b66c5949b8",
         "title": "Test Alpha Title",
         "description": "Description for Alpha.",
         "tags": [

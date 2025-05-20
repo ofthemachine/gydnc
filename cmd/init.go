@@ -82,13 +82,15 @@ If a path is provided, initialization occurs there. Otherwise, it uses the curre
 		fmt.Printf("Created TAG_ONTOLOGY.md: %s\n", tagOntologyFilePath)
 
 		// Create default config.yml in .gydnc
-		newCfg := config.NewDefaultConfig()
-		newCfg.DefaultBackend = defaultBackendName
-		storePathForConfig := "."
-		newCfg.StorageBackends[defaultBackendName] = &config.StorageConfig{
-			Type: "localfs",
-			LocalFS: &config.LocalFSConfig{
-				Path: storePathForConfig, // Store path is "." relative to .gydnc/config.yml
+		newCfg := &config.Config{
+			DefaultBackend: defaultBackendName,
+			StorageBackends: map[string]*config.StorageConfig{
+				defaultBackendName: {
+					Type: "localfs",
+					LocalFS: &config.LocalFSConfig{
+						Path: ".", // Store path is "." relative to .gydnc/config.yml
+					},
+				},
 			},
 		}
 		if err := config.Save(newCfg, configFilePath); err != nil {

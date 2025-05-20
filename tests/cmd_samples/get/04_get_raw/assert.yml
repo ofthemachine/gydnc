@@ -1,0 +1,10 @@
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      # Test Title
+
+      Test Body
+
+      # Test Title
+
+      Test Body

@@ -10,6 +10,6 @@ stdout:
           "test",
           "alpha"
         ],
-        "body": "# Test Alpha Title\\n\\nGuidance content for 'Test Alpha Title' goes here.\\n\nThis is the body content\nfor Test Alpha.\nIt has multiple lines.\n"
+        "body": "# Test Alpha Title\n\nGuidance content for 'Test Alpha Title' goes here.\nThis is the body content\nfor Test Alpha.\nIt has multiple lines.\n"
       }
 stderr: []

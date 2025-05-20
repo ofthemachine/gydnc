@@ -1,0 +1,7 @@
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      {
+        "title": "my-entity",
+        "body": "This is the body.\nWith a newline.\n"
+      }

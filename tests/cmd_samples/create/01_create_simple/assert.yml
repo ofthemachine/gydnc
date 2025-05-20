@@ -1,28 +1,9 @@
 exit_code: 0
 stdout:
-  - match_type: ORDERED_LINES
+  - match_type: JSON
     content: |
-      # REGEX: ^Created guidance store: .*/.gydnc$
-      # REGEX: ^Created TAG_ONTOLOGY.md: .*/.gydnc/TAG_ONTOLOGY.md$
-      # REGEX: ^Created configuration file: .*/.gydnc/config.yml$
-      # REGEX: ^gydnc initialized successfully in .*$
-      # REGEX: ^$
-      # REGEX: ^To activate this configuration for your current session, you can run:$
-      # REGEX: ^\s*export GYDNC_CONFIG=".*"$
-      # REGEX: ^Consider adding this line to your shell configuration file \(e.g., ~/.zshrc or ~/.bashrc\) for persistent use.$
-      Created guidance file: .gydnc/my-new-guidance.g6e
-      --- Content of my-new-guidance.g6e: ---
-      ---
-      title: my-new-guidance
-      ---
-      # my-new-guidance\n\nGuidance content for 'my-new-guidance' goes here.\n
+      {
+        "title": "my-new-guidance",
+        "body": "# my-new-guidance\n\nGuidance content for 'my-new-guidance' goes here.\n"
+      }
 stderr: []
-filesystem:
-  - path: .gydnc/my-new-guidance.g6e
-    exists: true
-    content_match_type: EXACT
-    content: |
-      ---
-      title: my-new-guidance
-      ---
-      # my-new-guidance\n\nGuidance content for 'my-new-guidance' goes here.\n

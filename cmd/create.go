@@ -213,9 +213,6 @@ If no body is provided, a default placeholder body will be generated.`,
 			}
 			actualBodyContent = string(bodyBytes)
 			bodySourceUsed = true
-		} else if bodyFlagUsed {
-			actualBodyContent = createBody
-			bodySourceUsed = true
 		} else if stdinIsPiped {
 			scanner := bufio.NewScanner(os.Stdin)
 			var lines []string
@@ -232,6 +229,12 @@ If no body is provided, a default placeholder body will be generated.`,
 				actualBodyContent = "" // Explicitly empty for empty stdin
 			}
 			bodySourceUsed = true // Considered used even if stdin was empty but piped
+		} else if bodyFlagUsed {
+			actualBodyContent = createBody
+			if actualBodyContent != "" && !strings.HasSuffix(actualBodyContent, "\n") {
+				actualBodyContent += "\n"
+			}
+			bodySourceUsed = true
 		}
 
 		// Generate initial content
@@ -262,7 +265,7 @@ If no body is provided, a default placeholder body will be generated.`,
 			fileBodyContent = actualBodyContent
 		} else {
 			// Default placeholder body if no explicit body is provided
-			fileBodyContent = fmt.Sprintf("# %s\\n\\nGuidance content for '%s' goes here.\\n", frontmatterData.Title, frontmatterData.Title)
+			fileBodyContent = fmt.Sprintf("# %s\n\nGuidance content for '%s' goes here.\n", frontmatterData.Title, frontmatterData.Title)
 		}
 
 		// The conceptual ID is now the SHA256 of fileBodyContent

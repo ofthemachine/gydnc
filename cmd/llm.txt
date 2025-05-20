@@ -112,3 +112,37 @@ Adhere to the specific command flags and structures as detailed in the `gydnc` h
 Always ensure you are using the correct alias or CID for operations.
 The `gydnc` system relies on content-addressability, so "updates" result in new CIDs.
 The `pCID` field in a guidance entity's metadata links it to its previous version.
+
+## Practical Advice for 'create' and 'get' Commands
+
+- When creating guidance, prefer providing the body via stdin (using a here-document or pipe) to ensure real newlines are preserved. Avoid using the --body flag for multi-line content in scripts/tests.
+- In automation or tests, suppress the output of the 'create' command (redirect to /dev/null) if you only care about the entity content, not the creation confirmation.
+- To verify or assert on the created entity, use 'gydnc get <alias>' and assert on its output (JSON/YAML/body), not on file content or raw stdout from 'create'.
+- The output of 'gydnc get' in JSON/YAML/body mode is machine-readable and should not include extra summary or list output.
+
+### Example: Canonical Script for Creation and Verification
+
+```bash
+./gydnc init > /dev/null
+export GYDNC_CONFIG="$(pwd)/.gydnc/config.yml"
+cat <<EOF | ./gydnc create my-entity --title "my-entity" > /dev/null
+# my-entity
+
+Guidance content for 'my-entity' goes here.
+EOF
+
+./gydnc get my-entity
+```
+
+### Example: Canonical Assertion (YAML)
+
+```yaml
+stdout:
+  - match_type: JSON
+    content: |
+      {
+        "title": "my-entity",
+        "body": "# my-entity\n\nGuidance content for 'my-entity' goes here.\n"
+      }
+stderr: []
+```
