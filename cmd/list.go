@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -16,6 +17,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var listJSON bool
+
 // listCmd represents the list command
 var listCmd = &cobra.Command{
 	Use:   "list",
@@ -24,6 +27,7 @@ var listCmd = &cobra.Command{
 Future enhancements may include filtering by backend or prefix.`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		isJSONMode = listJSON
 		defer func() {
 			if r := recover(); r != nil {
 				fmt.Fprintln(os.Stderr, "active backend not initialized; run 'gydnc init' or check config")
@@ -46,7 +50,9 @@ Future enhancements may include filtering by backend or prefix.`,
 		}
 		// slog.Debug("Starting 'list' command")
 
-		fmt.Println("Available guidance entities:")
+		if !listJSON {
+			fmt.Println("Available guidance entities:")
+		}
 		var allEntities []model.Entity
 		foundEntities := 0
 
@@ -59,7 +65,9 @@ Future enhancements may include filtering by backend or prefix.`,
 			if backendConfigEntry.Type == "localfs" {
 				tempBackend, errInit := InitializeBackendFromConfig(backendName, backendConfigEntry) // Pass pointer
 				if errInit != nil {
-					fmt.Printf("  Error initializing backend %s: %v\n", backendName, errInit)
+					if !listJSON {
+						fmt.Printf("  Error initializing backend %s: %v\n", backendName, errInit)
+					}
 					continue
 				}
 				currentBackend = tempBackend
@@ -67,38 +75,52 @@ Future enhancements may include filtering by backend or prefix.`,
 				// slog.Info("Skipping non-localfs backend or unhandled type for listing", "name", backendName, "type", backendConfigEntry.Type)
 				// For now, we only attempt to list from localfs backends.
 				// This should be expanded to support any backend type that implements List.
-				fmt.Printf("  Skipping backend %s (type: %s) - only localfs supported for listing in this version.\n", backendName, backendConfigEntry.Type)
+				if !listJSON {
+					fmt.Printf("  Skipping backend %s (type: %s) - only localfs supported for listing in this version.\n", backendName, backendConfigEntry.Type)
+				}
 				continue
 			}
 
 			if currentBackend == nil { // Should be caught by errInit != nil, but as a safeguard
-				fmt.Printf("  Could not get a backend instance for %s (was nil after init attempt)\n", backendName)
+				if !listJSON {
+					fmt.Printf("  Could not get a backend instance for %s (was nil after init attempt)\n", backendName)
+				}
 				continue
 			}
 
 			entities, err := currentBackend.List("")
 			if err != nil {
-				fmt.Printf("  Error listing entities from backend %s: %v\n", backendName, err)
+				if !listJSON {
+					fmt.Printf("  Error listing entities from backend %s: %v\n", backendName, err)
+				}
 				continue
 			}
 
 			if len(entities) == 0 {
 				// slog.Debug("No entities found in backend", "name", backendName)
 				// Optionally print something or just skip. For now, let's be verbose.
-				fmt.Printf("  No entities found in backend: %s\n", backendName)
+				if !listJSON {
+					fmt.Printf("  No entities found in backend: %s\n", backendName)
+				}
 				continue
 			}
 
-			fmt.Printf("  Backend: %s (%s)\n", backendName, backendConfigEntry.Type)
+			if !listJSON {
+				fmt.Printf("  Backend: %s (%s)\n", backendName, backendConfigEntry.Type)
+			}
 			for _, entityID := range entities {
 				contentBytes, meta, readErr := currentBackend.Read(entityID)
 				if readErr != nil {
-					fmt.Printf("    - %s (error reading: %v)\n", entityID, readErr)
+					if !listJSON {
+						fmt.Printf("    - %s (error reading: %v)\n", entityID, readErr)
+					}
 					continue
 				}
 				parsed, parseErr := content.ParseG6E(contentBytes)
 				if parseErr != nil {
-					fmt.Printf("    - %s (error parsing: %v)\n", entityID, parseErr)
+					if !listJSON {
+						fmt.Printf("    - %s (error parsing: %v)\n", entityID, parseErr)
+					}
 					continue
 				}
 				entity := model.Entity{
@@ -108,13 +130,38 @@ Future enhancements may include filtering by backend or prefix.`,
 					Description:    parsed.Description,
 					Tags:           parsed.Tags,
 					CustomMetadata: meta, // Optionally filter meta fields
-					Body:           parsed.Body,
+					// Body omitted for list
 				}
 				cid, _ := parsed.GetContentID()
 				entity.CID = cid
 				allEntities = append(allEntities, entity)
 				foundEntities++
 			}
+		}
+
+		if listJSON {
+			type ListEntity struct {
+				Alias       string   `json:"alias"`
+				Title       string   `json:"title"`
+				Description string   `json:"description,omitempty"`
+				Tags        []string `json:"tags,omitempty"`
+			}
+			var out []ListEntity
+			for _, e := range allEntities {
+				out = append(out, ListEntity{
+					Alias:       e.Alias,
+					Title:       e.Title,
+					Description: e.Description,
+					Tags:        e.Tags,
+				})
+			}
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			if err := enc.Encode(out); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to encode JSON: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		}
 
 		if foundEntities == 0 {
@@ -167,6 +214,7 @@ func InitializeBackendFromConfig(name string, beConfig *config.StorageConfig) (s
 
 func init() {
 	rootCmd.AddCommand(listCmd)
+	listCmd.Flags().BoolVar(&listJSON, "json", false, "Output as JSON array (fields: alias, title, description, tags, source_backend)")
 	// Add flags here if needed in the future, e.g.:
 	// listCmd.Flags().StringP("backend", "b", "", "Filter by specific backend name")
 	// listCmd.Flags().StringP("prefix", "p", "", "Filter by entity ID prefix")

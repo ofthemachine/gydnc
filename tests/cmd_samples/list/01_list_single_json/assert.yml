@@ -1,0 +1,16 @@
+exit_code: 0
+stdout:
+  - match_type: JSON
+    content: |
+      [
+        {
+          "alias": "test-entity",
+          "title": "Single Entity",
+          "description": "A test entity",
+          "tags": [
+            "test",
+            "one"
+          ]
+        }
+      ]
+stderr: []

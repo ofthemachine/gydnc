@@ -1,0 +1,34 @@
+exit_code: 0
+stdout:
+  - match_type: JSON
+    content: |
+      [
+        {
+          "alias": "shared-entity",
+          "title": "Entity in BE1",
+          "description": "From backend 1",
+          "tags": [
+            "be1",
+            "shared"
+          ]
+        },
+        {
+          "alias": "shared-entity",
+          "title": "Entity in BE2",
+          "description": "From backend 2",
+          "tags": [
+            "be2",
+            "shared"
+          ]
+        },
+        {
+          "alias": "unique-entity",
+          "title": "Unique in BE2",
+          "description": "Unique entity",
+          "tags": [
+            "be2",
+            "unique"
+          ]
+        }
+      ]
+stderr: []

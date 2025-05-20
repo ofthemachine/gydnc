@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	cfgFile   string
-	verbosity int
-	quiet     bool
+	cfgFile    string
+	verbosity  int
+	quiet      bool
+	isJSONMode bool // Set by commands like list --json
 	// Weitere globale Flags hier, z.B. backendName
 )
 
@@ -72,12 +73,10 @@ func initConfig() {
 	cmdName := ""
 	if len(os.Args) > 1 {
 		cmdName = os.Args[1]
-		fmt.Fprintf(os.Stderr, "[DEBUG] initConfig: os.Args[1]=%q\n", cmdName)
 		if cmdName == "init" || cmdName == "version" {
 			requireConfig = false
 		}
 	}
-	fmt.Fprintf(os.Stderr, "[DEBUG] initConfig: requireConfig=%v\n", requireConfig)
 	_, err := config.Load(cfgFile, requireConfig) // Pass requireConfig
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "active backend not initialized; run 'gydnc init' or check config\n")
