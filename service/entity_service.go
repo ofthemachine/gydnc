@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 
+	"gydnc/filter"
 	"gydnc/model"
 	"gydnc/storage"
 )
@@ -95,6 +96,78 @@ func (s *EntityService) ListEntities(prefix string) (map[string][]model.Entity, 
 	return results, backendErrors
 }
 
+// ListEntitiesMerged returns a list of entities from all configured backends that match the given prefix.
+// Entities are deduplicated based on alias, with priority given to the default backend and then to
+// backends in the order they are defined in the config.
+// If filterString is provided, only entities matching the filter will be returned.
+func (s *EntityService) ListEntitiesMerged(prefix string, filterString string) ([]model.Entity, map[string]error) {
+	// Get the entities from all backends
+	backendEntities, backendErrors := s.ListEntities(prefix)
+
+	// Create a map to deduplicate entities by alias
+	uniqueEntities := make(map[string]model.Entity)
+
+	// Get the default backend name for prioritization
+	defaultBackendName := s.ctx.Config.DefaultBackend
+
+	// First, add entities from the default backend if available
+	if defaultBackendName != "" {
+		if entities, ok := backendEntities[defaultBackendName]; ok {
+			for _, entity := range entities {
+				uniqueEntities[entity.Alias] = entity
+			}
+		}
+	}
+
+	// Then add entities from other backends, preserving existing ones in case of duplicates
+	for backendName, entities := range backendEntities {
+		// Skip default backend as we already processed it
+		if backendName == defaultBackendName {
+			continue
+		}
+
+		for _, entity := range entities {
+			// Only add if we haven't seen this alias before
+			if _, exists := uniqueEntities[entity.Alias]; !exists {
+				uniqueEntities[entity.Alias] = entity
+			}
+		}
+	}
+
+	// Convert map to slice
+	mergedEntities := make([]model.Entity, 0, len(uniqueEntities))
+	for _, entity := range uniqueEntities {
+		mergedEntities = append(mergedEntities, entity)
+	}
+
+	// Apply filter if provided
+	if filterString != "" {
+		var err error
+		mergedEntities, err = s.FilterEntities(mergedEntities, filterString)
+		if err != nil {
+			s.ctx.Logger.Warn("Error applying filter", "filter", filterString, "error", err)
+		}
+	}
+
+	return mergedEntities, backendErrors
+}
+
+// FilterEntities applies a filter string to a list of entities.
+// It uses the filter package to perform the filtering.
+func (s *EntityService) FilterEntities(entities []model.Entity, filterString string) ([]model.Entity, error) {
+	if filterString == "" {
+		return entities, nil
+	}
+
+	// Import the filter package
+	f, err := filter.NewFilterFromString(filterString)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse filter string: %w", err)
+	}
+
+	return f.Filter(entities), nil
+}
+
 // GetEntity retrieves a single entity from the specified backend.
 // If backendName is empty, it searches all backends with priority given to the default backend.
 func (s *EntityService) GetEntity(alias string, backendName string) (model.Entity, error) {
@@ -108,24 +181,71 @@ func (s *EntityService) GetEntity(alias string, backendName string) (model.Entit
 		if err != nil {
 			return entity, fmt.Errorf("failed to get backend %s: %w", backendName, err)
 		}
-	} else {
-		// Otherwise, try to get the default backend
-		backendToUse, err = s.ctx.GetDefaultBackend()
+
+		// Read the entity content and metadata
+		content, metadata, err := backendToUse.Read(alias)
 		if err != nil {
-			return entity, fmt.Errorf("no backend specified and no default backend available: %w", err)
+			return entity, fmt.Errorf("failed to read entity %s from backend %s: %w", alias, backendToUse.GetName(), err)
 		}
-	}
 
-	// Read the entity content and metadata
-	content, metadata, err := backendToUse.Read(alias)
-	if err != nil {
-		return entity, fmt.Errorf("failed to read entity %s from backend %s: %w", alias, backendToUse.GetName(), err)
-	}
+		// Create an Entity with the information
+		entity = s.createEntityFromBackendData(alias, backendToUse.GetName(), content, metadata)
+		return entity, nil
+	} else {
+		// If no backend specified, search through backends in priority order
+		s.ctx.Logger.Debug("No backend specified, searching through all backends in priority order", "alias", alias)
 
-	// Create an Entity with the information
-	entity = model.Entity{
+		// Get all backends
+		backends, backendErrors := s.ctx.GetAllBackends()
+		if len(backends) == 0 {
+			// No backends available
+			return entity, fmt.Errorf("no backends available: %v", backendErrors)
+		}
+
+		// Try default backend first if configured
+		defaultBackendName := s.ctx.Config.DefaultBackend
+		if defaultBackendName != "" {
+			if defaultBackend, ok := backends[defaultBackendName]; ok {
+				content, metadata, err := defaultBackend.Read(alias)
+				if err == nil {
+					// Found in default backend
+					entity = s.createEntityFromBackendData(alias, defaultBackend.GetName(), content, metadata)
+					return entity, nil
+				}
+				// Log the error but continue with other backends
+				s.ctx.Logger.Debug("Entity not found in default backend", "backend", defaultBackendName, "alias", alias, "error", err)
+			}
+		}
+
+		// Try all other backends in the order defined in the config
+		// Note: map iteration order is not guaranteed, but we're maintaining ordering based on config
+		for name, backend := range backends {
+			// Skip default backend as we already tried it
+			if name == defaultBackendName {
+				continue
+			}
+
+			content, metadata, err := backend.Read(alias)
+			if err == nil {
+				// Found in this backend
+				entity = s.createEntityFromBackendData(alias, backend.GetName(), content, metadata)
+				return entity, nil
+			}
+			// Log the error but continue with other backends
+			s.ctx.Logger.Debug("Entity not found in backend", "backend", name, "alias", alias, "error", err)
+		}
+
+		// Entity not found in any backend
+		return entity, fmt.Errorf("entity %s not found in any available backend", alias)
+	}
+}
+
+// createEntityFromBackendData is a helper function to create an Entity from backend data
+// This reduces duplication in the GetEntity method
+func (s *EntityService) createEntityFromBackendData(alias string, backendName string, content []byte, metadata map[string]interface{}) model.Entity {
+	entity := model.Entity{
 		Alias:         alias,
-		SourceBackend: backendToUse.GetName(),
+		SourceBackend: backendName,
 		Body:          string(content),
 	}
 
@@ -162,7 +282,7 @@ func (s *EntityService) GetEntity(alias string, backendName string) (model.Entit
 		entity.PCID = pcid
 	}
 
-	return entity, nil
+	return entity
 }
 
 // SaveEntity saves an entity to the specified backend.

@@ -1,0 +1,25 @@
+exit_code: 0
+stdout:
+  - match_type: JSON
+    content: |
+      [
+        {
+          "alias": "code-entity",
+          "description": "A code-related entity",
+          "tags": [
+            "quality:safety",
+            "scope:code"
+          ],
+          "title": "Code Entity"
+        },
+        {
+          "alias": "docs-entity",
+          "description": "A documentation entity",
+          "tags": [
+            "quality:clarity",
+            "scope:docs"
+          ],
+          "title": "Docs Entity"
+        }
+      ]
+stderr: []

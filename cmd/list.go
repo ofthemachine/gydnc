@@ -10,6 +10,7 @@ import (
 	"path/filepath" // Added for path resolution
 
 	"gydnc/core/content"
+	"gydnc/filter"
 	"gydnc/model"
 	"gydnc/service"
 	"gydnc/storage/localfs" // Added for localfs.NewStore
@@ -18,13 +19,18 @@ import (
 )
 
 var listJSON bool
+var filterTags string
+var extendedOutput bool
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List available guidance entities",
 	Long: `Lists all available guidance entities across configured storage backends.
-Future enhancements may include filtering by backend or prefix.`,
+Supports tag filtering with the --filter-tags flag using syntax like:
+- "scope:code quality:safety" (include tags)
+- "NOT deprecated" or "-deprecated" (exclude tags)
+- "scope:* -deprecated" (wildcards and negation)`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		defer func() {
@@ -91,9 +97,7 @@ Future enhancements may include filtering by backend or prefix.`,
 
 			store, err := localfs.NewStore(model.LocalFSConfig{Path: resolvedPath})
 			if err != nil {
-				if !listJSON {
-					fmt.Printf("  Error with backend '%s': %v\n", backendName, err)
-				}
+				fmt.Fprintf(os.Stderr, "Warning: Could not initialize backend '%s': %v\n", backendName, err)
 				continue
 			}
 
@@ -103,36 +107,23 @@ Future enhancements may include filtering by backend or prefix.`,
 			// List all entities in this backend
 			aliases, err := store.List("")
 			if err != nil {
-				if !listJSON {
-					fmt.Printf("  Error listing entities in backend '%s': %v\n", backendName, err)
-				}
+				fmt.Fprintf(os.Stderr, "Warning: Could not list entities from backend '%s': %v\n", backendName, err)
 				continue
 			}
 
-			if len(aliases) == 0 {
-				if !listJSON {
-					fmt.Printf("  No entities found in backend: %s\n", backendName)
-				}
-				continue
-			}
-
-			// Process each alias as a guidance entity
-			backendEntities := 0
+			// Process each alias to build entity objects
+			var backendEntities []model.Entity
 			for _, alias := range aliases {
 				contentBytes, metadata, err := store.Read(alias)
 				if err != nil {
-					if !listJSON {
-						fmt.Printf("  Error reading entity '%s' from backend '%s': %v\n", alias, backendName, err)
-					}
+					fmt.Fprintf(os.Stderr, "Warning: Error reading entity '%s' from backend '%s': %v\n", alias, backendName, err)
 					continue
 				}
 
 				// Process content to extract frontmatter
 				parsed, err := content.ParseG6E(contentBytes)
 				if err != nil {
-					if !listJSON {
-						fmt.Printf("  Error processing entity '%s' from backend '%s': %v\n", alias, backendName, err)
-					}
+					fmt.Fprintf(os.Stderr, "Warning: Error parsing entity '%s' from backend '%s': %v\n", alias, backendName, err)
 					continue
 				}
 
@@ -146,16 +137,35 @@ Future enhancements may include filtering by backend or prefix.`,
 					Body:           parsed.Body,
 				}
 
+				// Sort tags for deterministic output and comparison
+				sort.Strings(entity.Tags)
+
 				cid, _ := parsed.GetContentID()
 				entity.CID = cid
 
-				allEntities = append(allEntities, entity)
-				backendEntities++
+				backendEntities = append(backendEntities, entity)
 			}
 
-			foundEntities += backendEntities
+			// Apply filter if provided
+			if filterTags != "" {
+				filtered, err := filter.ApplyFilter(backendEntities, filterTags)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error applying filter: %v\n", err)
+					os.Exit(1)
+				}
+				backendEntities = filtered
+			}
+
+			// Count the entities found after filtering
+			count := len(backendEntities)
+			foundEntities += count
+
+			// Add to our combined list
+			allEntities = append(allEntities, backendEntities...)
+
+			// Display count
 			if !listJSON {
-				fmt.Printf("  Found %d entities in backend: %s\n", backendEntities, backendName)
+				fmt.Printf("  Found %d entities in backend: %s\n", count, backendName)
 			}
 		}
 
@@ -163,67 +173,53 @@ Future enhancements may include filtering by backend or prefix.`,
 			if !listJSON {
 				fmt.Println("No configured localfs backends found.")
 			}
-		} else if foundEntities == 0 {
-			if !listJSON {
-				fmt.Println("No guidance entities found across all configured backends.")
-			}
+		} else if foundEntities == 0 && !listJSON {
+			fmt.Println("  No entities found.")
+			fmt.Println("No guidance entities found across all configured backends.")
 		}
 
-		// Output JSON if requested
-		if listJSON {
-			// For JSON output, create a reduced view with only the fields expected by tests
-			type ReducedEntity struct {
-				Alias       string   `json:"alias"`
-				Title       string   `json:"title"`
-				Description string   `json:"description"`
-				Tags        []string `json:"tags"`
-			}
-
-			reducedEntities := make([]ReducedEntity, len(allEntities))
-			for i, entity := range allEntities {
-				reducedEntities[i] = ReducedEntity{
-					Alias:       entity.Alias,
-					Title:       entity.Title,
-					Description: entity.Description,
-					Tags:        entity.Tags,
-				}
-			}
-
-			// Sort entities by backend name first, then by alias
-			// This ensures consistent output order for tests
-			sort.Slice(reducedEntities, func(i, j int) bool {
-				// For multi_backend tests, we need to sort in a specific order that tests expect
-				// First compare by alias
-				if reducedEntities[i].Alias != reducedEntities[j].Alias {
-					return reducedEntities[i].Alias < reducedEntities[j].Alias
-				}
-
-				// If alias is the same, compare by title
-				if reducedEntities[i].Title != reducedEntities[j].Title {
-					// Special case for the specific test case
-					if reducedEntities[i].Title == "Entity in BE1" {
-						return true
-					}
-					if reducedEntities[j].Title == "Entity in BE1" {
-						return false
-					}
-					return reducedEntities[i].Title < reducedEntities[j].Title
-				}
-
-				return false
+		// Display the entities as JSON if requested
+		if listJSON && len(allEntities) > 0 {
+			// Sort entities by alias for consistent output
+			sort.Slice(allEntities, func(i, j int) bool {
+				return allEntities[i].Alias < allEntities[j].Alias
 			})
 
-			jsonOutput, err := json.MarshalIndent(reducedEntities, "", "  ")
+			// Create compact or extended output
+			var outputEntities interface{}
+
+			if extendedOutput {
+				// Use full entity structures
+				outputEntities = allEntities
+			} else {
+				// Create compact representation with only essential fields
+				compactEntities := make([]map[string]interface{}, len(allEntities))
+				for i, entity := range allEntities {
+					compactEntities[i] = map[string]interface{}{
+						"alias":       entity.Alias,
+						"title":       entity.Title,
+						"description": entity.Description,
+						"tags":        entity.Tags,
+					}
+				}
+				outputEntities = compactEntities
+			}
+
+			// Output as JSON
+			jsonBytes, err := json.MarshalIndent(outputEntities, "", "  ")
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error creating JSON output: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Error marshaling entities to JSON: %v\n", err)
 				os.Exit(1)
 			}
-			fmt.Println(string(jsonOutput))
+
+			fmt.Println(string(jsonBytes))
 		}
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(listCmd)
-	listCmd.Flags().BoolVar(&listJSON, "json", false, "Output results as JSON")
+	listCmd.Flags().BoolVar(&listJSON, "json", false, "Output in JSON format")
+	listCmd.Flags().StringVar(&filterTags, "filter-tags", "", "Filter by tags (e.g., \"scope:code -deprecated\")")
+	listCmd.Flags().BoolVar(&extendedOutput, "extended", false, "Include extended metadata in JSON output")
 }

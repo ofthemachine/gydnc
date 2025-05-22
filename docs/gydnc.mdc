@@ -1,0 +1,149 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# gydnc-interaction-framework
+# Guidance Agent Interaction Framework
+
+## Intent
+Ensure effective guidance retrieval and creation through the gydnc CLI tool, adapting to evolving user requests throughout a session.
+
+## Rules
+
+### 1. Guidance Retrieval Workflow
+ALWAYS follow this sequence to ensure you have comprehensive guidance:
+
+1. **BEGIN WITH OVERVIEW:** Start EVERY session by getting a complete overview of available guidance:
+    ```bash
+    # CRITICAL: Get overview of ALL available guidance entities
+    gydnc list --json
+    ```
+    This step is NON-OPTIONAL. You must begin by understanding what guidance is available.
+
+2. **FETCH DETAILED GUIDANCE:** After identifying relevant guidance from the overview, retrieve full details:
+    ```bash
+    # Get complete guidance content for multiple entities in one command
+    gydnc get <entity1> <entity2> <entity3>
+    ```
+    Do NOT use the --json flag with 'get' commands, as the default output provides the complete guidance text.
+
+3. **PREFER BATCH RETRIEVAL:** Always fetch multiple relevant guidance entities in a single command rather than separate commands.
+
+4. **RE-FETCH AS REQUESTS EVOLVE:** When the user's request changes direction or introduces new requirements, IMMEDIATELY fetch additional relevant guidance:
+    ```bash
+    # Example: When user asks about a new topic (e.g., "write a blog post")
+    gydnc list --json
+    gydnc get <relevant-blog-writing-guidance>
+    ```
+    It is CRITICAL to adapt and fetch new guidance as the conversation progresses.
+
+### 2. Guidance Creation Workflow
+When creating new guidance entities:
+
+1. **CAPTURE EXISTING CONTENT:** Use stdin piping to create guidance from existing content:
+    ```bash
+    # Pipe content directly into a new guidance entity
+    cat existing-content.md | gydnc create --title "Title" --description "Description" --tags tech:git,lang:go,repo:agentt <alias>
+    ```
+    This is the PREFERRED method for creating guidance with existing content.
+
+2. **COMPLETE METADATA:** Always include comprehensive metadata when creating:
+    ```bash
+    # Create with full metadata
+    gydnc create --title "Comprehensive Title" --description "Detailed description" --tags lang:go,repo:backend,core:must <alias>
+    ```
+
+3. **USE HIERARCHICAL ORGANIZATION:** Organize guidance in logical hierarchies:
+    ```bash
+    # Create entity in appropriate category structure
+    gydnc create development/backend/api-design/<entity-name>
+    ```
+
+### 3. Guidance Update Workflow
+When updating existing guidance:
+
+1. **TARGETED UPDATES:** Make specific updates to metadata or content:
+    ```bash
+    # Update title, description, or add/remove specific tags
+    gydnc update <alias> --title "Updated Title" --description "New description"
+    gydnc update <alias> --add-tag "quality:critical,priority:high" --remove-tag "scope:universal"
+    ```
+
+2. **CONTENT UPDATES:** Update the body content with meaningful changes:
+    ```bash
+    # Update content by piping new content from a file
+    cat updated_content.md | gydnc update <alias>
+
+    # Or pipe directly from another command
+    echo "# New Content" | gydnc update <alias>
+    ```
+
+3. **VERSIONING AWARENESS:** Be mindful that updates create new versions in Git repositories:
+    ```bash
+    # First verify the current content before updating
+    gydnc get <alias>
+
+    # Then make targeted updates
+    gydnc update <alias> --title "Updated Title"
+    ```
+
+### 4. Adaptive Guidance Retrieval
+As the user's needs evolve during a conversation:
+
+1. **CONTINUOUS MONITORING:** Constantly evaluate if new guidance is needed based on:
+   * Topic changes in the conversation
+   * New requirements introduced by the user
+   * Requests for specific outputs (blog posts, code, documentation)
+
+2. **PROACTIVE RETRIEVAL:** When the conversation shifts, proactively fetch new guidance:
+    ```bash
+    # When conversation shifts to implementation details
+    gydnc get implementation/best-practices
+
+    # When user requests a specific output format
+    gydnc get content/blog-writing-guide
+    ```
+
+3. **VERIFICATION:** After fetching new guidance, verify it addresses the user's evolving needs before proceeding.
+
+### 5. Command Syntax Reference
+
+1. **Overview Retrieval (MANDATORY):**
+    ```bash
+    gydnc list --json
+    ```
+
+2. **Detailed Guidance Retrieval:**
+    ```bash
+    gydnc get <entity1> [<entity2> ...]
+    ```
+
+3. **Guidance Creation with Piped Content:**
+    ```bash
+    cat content.md | gydnc create --title "Title" --tags lang:go,repo:agentt <alias>
+    ```
+
+4. **Guidance Creation with Direct Content:**
+    ```bash
+    gydnc create --title "Title" --description "Description" --tags tech:git,os:linux --body "# Content" <alias>
+    ```
+
+5. **Guidance Update Commands:**
+    ```bash
+    # Update metadata
+    gydnc update <alias> --title "New Title" --description "New description"
+
+    # Update tags
+    gydnc update <alias> --add-tag "tag1,tag2" --remove-tag "tag3"
+
+    # Update content by piping
+    cat new_content.md | gydnc update <alias>
+    ```
+
+## Notes
+- The full guidance content is critical for understanding context and requirements
+- Never rely solely on the overview - always retrieve full guidance with `gydnc get`
+- As user requests evolve (e.g., "write a blog about this"), retrieve appropriate additional guidance
+- The most common error is failing to adapt and fetch new guidance as the conversation progresses
+- When in doubt, check for more comprehensive guidance that might be available

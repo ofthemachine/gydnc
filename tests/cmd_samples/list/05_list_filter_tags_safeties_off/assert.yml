@@ -1,0 +1,25 @@
+exit_code: 0
+stdout:
+  - match_type: JSON
+    content: |
+      [
+        {
+          "alias": "clarity-entity",
+          "description": "A clarity-related entity",
+          "tags": [
+            "quality:clarity",
+            "scope:docs"
+          ],
+          "title": "Clarity Entity"
+        },
+        {
+          "alias": "performance-entity",
+          "description": "A performance-related entity",
+          "tags": [
+            "quality:performance",
+            "scope:code"
+          ],
+          "title": "Performance Entity"
+        }
+      ]
+stderr: []
