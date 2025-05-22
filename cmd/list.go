@@ -9,9 +9,9 @@ import (
 	// "log/slog" // For structured logging, if needed
 	"path/filepath" // Added for path resolution
 
-	"gydnc/config"
 	"gydnc/core/content"
 	"gydnc/model"
+	"gydnc/service"
 	"gydnc/storage/localfs" // Added for localfs.NewStore
 
 	"github.com/spf13/cobra"
@@ -33,16 +33,25 @@ Future enhancements may include filtering by backend or prefix.`,
 				os.Exit(1)
 			}
 		}()
-		if config.GetLoadedConfigActualPath() == "" {
+
+		// Check if app context is initialized
+		if appContext == nil || appContext.Config == nil {
 			fmt.Fprintln(os.Stderr, "active backend not initialized; run 'gydnc init' or check config")
 			os.Exit(1)
 		}
-		cfg := config.Get()
+
+		// Get config from app context
+		cfg := appContext.Config
 		if cfg == nil || len(cfg.StorageBackends) == 0 {
 			fmt.Fprintln(os.Stderr, "active backend not initialized; run 'gydnc init' or check config")
 			os.Exit(1)
 		}
-		_, err := config.GetActiveStorageBackend(cfg)
+
+		// Create a config service to help with operations
+		configService := service.NewConfigService(appContext)
+
+		// Get the active storage backend config
+		_, err := configService.GetActiveStorageBackend(cfg)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "active backend not initialized; run 'gydnc init' or check config")
 			os.Exit(1)
@@ -54,6 +63,13 @@ Future enhancements may include filtering by backend or prefix.`,
 		}
 		var allEntities []model.Entity
 		foundEntities := 0
+
+		// Get the config path for resolving relative paths
+		configPath, err := configService.GetEffectiveConfigPath(cfgFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting config path: %v\n", err)
+			os.Exit(1)
+		}
 
 		foundBackends := false // Track if we found any valid backends to query
 		for backendName, backendCfg := range cfg.StorageBackends {
@@ -68,12 +84,12 @@ Future enhancements may include filtering by backend or prefix.`,
 			foundBackends = true
 			resolvedPath := backendCfg.LocalFS.Path
 			// If path is relative, it's relative to the config file's directory.
-			cfgDir := filepath.Dir(config.GetLoadedConfigActualPath())
+			cfgDir := filepath.Dir(configPath)
 			if !filepath.IsAbs(resolvedPath) {
 				resolvedPath = filepath.Join(cfgDir, resolvedPath)
 			}
 
-			store, err := localfs.NewStore(config.LocalFSConfig{Path: resolvedPath})
+			store, err := localfs.NewStore(model.LocalFSConfig{Path: resolvedPath})
 			if err != nil {
 				if !listJSON {
 					fmt.Printf("  Error with backend '%s': %v\n", backendName, err)

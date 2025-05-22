@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"gydnc/config"
+	"gydnc/service"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -23,14 +23,19 @@ var configViewCmd = &cobra.Command{
 	Long:  `Prints the currently loaded gydnc configuration to standard output in YAML format.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		slog.Debug("Starting 'config view' command execution")
-		cfg := config.Get() // Get the globally loaded config
-		if cfg == nil {
-			// This should ideally not happen if initConfig always loads or creates a default.
-			return fmt.Errorf("configuration not loaded")
+
+		// Check if app context is initialized
+		if appContext == nil || appContext.Config == nil {
+			return fmt.Errorf("configuration not loaded; run 'gydnc init' or check config")
 		}
 
-		loadedPath := config.GetLoadedConfigActualPath()
-		if loadedPath != "" {
+		// Get config from app context
+		cfg := appContext.Config
+
+		// Create a config service to get the effective config path
+		configService := service.NewConfigService(appContext)
+		loadedPath, err := configService.GetEffectiveConfigPath(cfgFile)
+		if err == nil && loadedPath != "" {
 			fmt.Printf("# Configuration loaded from: %s\n", loadedPath)
 		} else {
 			fmt.Println("# Configuration is using default values (not loaded from a file).")

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gydnc/config" // For config.LocalFSConfig
+	"gydnc/model"
 	// "gydnc/storage" // Not imported to avoid circular dependency if storage imports localfs indirectly
 )
 
@@ -23,7 +23,7 @@ type Store struct {
 
 // NewStore creates a new local filesystem backend.
 // The provided LocalFSConfig contains the root path for this store.
-func NewStore(cfg config.LocalFSConfig) (*Store, error) {
+func NewStore(cfg model.LocalFSConfig) (*Store, error) {
 	if cfg.Path == "" {
 		return nil, fmt.Errorf("localfs path cannot be empty")
 	}

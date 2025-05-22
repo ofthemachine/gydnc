@@ -3,20 +3,20 @@ package service
 import (
 	"log/slog"
 
-	"gydnc/config"
+	"gydnc/model"
 	"gydnc/storage"
 )
 
 // AppContext holds application-wide dependencies and configuration.
 // It is passed to service functions rather than relying on global state.
 type AppContext struct {
-	Config *config.Config
+	Config *model.Config
 	Logger *slog.Logger
 }
 
 // NewAppContext creates a new AppContext with the provided configuration and logger.
 // If logger is nil, a default logger will be created.
-func NewAppContext(cfg *config.Config, logger *slog.Logger) *AppContext {
+func NewAppContext(cfg *model.Config, logger *slog.Logger) *AppContext {
 	if logger == nil {
 		logger = slog.Default()
 	}

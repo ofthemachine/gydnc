@@ -13,12 +13,24 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// IMPORTANT: g6e File Format Backward Compatibility Notice
+//
+// The g6e file format is considered "extend only" for backward compatibility.
+// - The YAML frontmatter structure may be extended with new fields
+// - Existing fields must not be renamed or removed
+// - The format (---\n YAML \n---\n content) must be preserved
+//
+// Changes to this format must be carefully considered and documented.
+
 const (
 	frontmatterDelimiter = "---"
 	delimiterNewLine     = "\n"
 )
 
 // GuidanceContent holds the parsed content of a .g6e file.
+//
+// EXTEND ONLY: This structure may be extended with new fields but existing
+// fields must not be renamed or removed to maintain backward compatibility.
 type GuidanceContent struct {
 	Title       string   `yaml:"title"`
 	Description string   `yaml:"description,omitempty"`
@@ -36,6 +48,9 @@ type frontmatterYAML struct {
 }
 
 // StandardFrontmatter defines the complete set of metadata fields for a new guidance entity.
+//
+// EXTEND ONLY: This structure may be extended with new fields but existing
+// fields must not be renamed or removed to maintain backward compatibility.
 type StandardFrontmatter struct {
 	// ID          string   `yaml:"id"` // Removed: ID is now content-addressable
 	Title       string   `yaml:"title"`

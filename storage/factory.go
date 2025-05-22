@@ -3,7 +3,7 @@ package storage
 import (
 	"fmt"
 
-	"gydnc/config"
+	"gydnc/model"
 	"gydnc/storage/inmem"
 	"gydnc/storage/localfs"
 )
@@ -13,7 +13,7 @@ var BackendRegistry = make(map[string]ReadOnlyBackend)
 
 // NewBackendFromConfig creates a new backend based on the provided configuration.
 // Returns the backend interface and any error encountered during initialization.
-func NewBackendFromConfig(name string, cfg *config.StorageConfig) (ReadOnlyBackend, error) {
+func NewBackendFromConfig(name string, cfg *model.StorageConfig) (ReadOnlyBackend, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("cannot create backend from nil config")
 	}
@@ -63,7 +63,7 @@ func ClearRegistry() {
 
 // InitializeBackends initializes all backends defined in the configuration.
 // Returns a map of backend names to initialization errors.
-func InitializeBackends(cfg *config.Config) map[string]error {
+func InitializeBackends(cfg *model.Config) map[string]error {
 	errors := make(map[string]error)
 
 	for name, backendCfg := range cfg.StorageBackends {

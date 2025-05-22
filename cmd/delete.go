@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"gydnc/config"
 	"gydnc/core/content"
 	"gydnc/model"
 
@@ -26,7 +25,13 @@ Requires confirmation unless --force is specified.`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		aliases := args
-		cfg := config.Get()
+
+		// Check if app context is initialized
+		if appContext == nil || appContext.Config == nil {
+			return fmt.Errorf("active backend not initialized; run 'gydnc init' or check config")
+		}
+
+		cfg := appContext.Config
 		var toDelete []model.Entity
 		var notFound []string
 

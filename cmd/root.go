@@ -6,15 +6,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"gydnc/config"
 	"gydnc/internal/logging"
 	"gydnc/service"
 )
 
 var (
-	cfgFile   string
-	verbosity int
-	quiet     bool
+	cfgFile    string
+	verbosity  int
+	quiet      bool
+	appContext *service.AppContext // Exposed to be used by other files in cmd package
 )
 
 var rootCmd = &cobra.Command{
@@ -69,21 +69,25 @@ func initConfig() {
 		return
 	}
 
-	// For all other commands, we need a proper config
-	ctx := service.NewAppContext(nil, nil)
-	configService := service.NewConfigService(ctx)
+	// Create app context and config service
+	appContext = service.NewAppContext(nil, nil)
+	configService := service.NewConfigService(appContext)
 
+	// Load config using the service layer
 	configPath, err := configService.GetEffectiveConfigPath(cfgFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "active backend not initialized; run 'gydnc init' or check config\n")
 		os.Exit(1)
 	}
 
-	_, err = config.Load(configPath, true)
+	config, err := configService.LoadFromPath(configPath, true)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "active backend not initialized; run 'gydnc init' or check config\n")
 		os.Exit(1)
 	}
+
+	// Update the app context with the loaded config
+	appContext.Config = config
 
 	// Initialize the active backend
 	if err := InitActiveBackend(); err != nil {

@@ -10,7 +10,6 @@ import (
 	// "path/filepath" // Not strictly used in this iteration but often useful
 	"slices" // Go 1.21+ for slices.Contains & Sort
 
-	"gydnc/config"
 	"gydnc/core/content"
 	"gydnc/model"
 	"gydnc/storage"
@@ -45,7 +44,12 @@ the file will not be modified.`,
 		alias := args[0]
 		// slog.Debug("Starting 'update' command", "alias", alias, "title", updateTitle, "description", updateDescription, "addTags", addTags, "removeTags", removeTags)
 
-		cfg := config.Get()
+		// Check if app context is initialized
+		if appContext == nil || appContext.Config == nil {
+			return fmt.Errorf("configuration not loaded; run 'gydnc init' or check config")
+		}
+
+		cfg := appContext.Config
 		var backend storage.Backend
 		var backendName string // To store the name of the resolved backend
 		var originalContentBytes []byte
@@ -231,7 +235,7 @@ the file will not be modified.`,
 // It is given an alias and attempts to read it from each backend.
 // Returns the backend instance, the path relative to the backend (which is the alias itself for localfs),
 // the backend's name, and an error if not found.
-func discoverEntityAcrossBackends(cfg *config.Config, alias string) (storage.Backend, string, string, error) {
+func discoverEntityAcrossBackends(cfg *model.Config, alias string) (storage.Backend, string, string, error) {
 	var lastError error
 	for name, backendConfig := range cfg.StorageBackends {
 		if backendConfig.Type != "localfs" {
@@ -249,31 +253,29 @@ func discoverEntityAcrossBackends(cfg *config.Config, alias string) (storage.Bac
 			lastError = fmt.Errorf("failed to initialize temp store for backend %s: %w", name, initErr)
 			continue
 		}
+		tempStore.SetName(name)
 
-		_, meta, readErr := tempStore.Read(alias)
-		if readErr == nil && meta != nil {
-			if pathVal, ok := meta["path"]; ok {
-				if pathStr, isStr := pathVal.(string); isStr && pathStr != "" {
-					return tempStore, pathStr, name, nil
-				}
-			}
-		}
-		if readErr != nil {
-			lastError = readErr
+		// Read directly from the temp store; if found, return immediately
+		_, stats, readErr := tempStore.Read(alias)
+		if readErr == nil && stats != nil {
+			// Successfully found the entity in this backend
+			return tempStore, alias, name, nil
 		}
 	}
+
+	// If we get here, the entity was not found in any backend.
+	// Return the last error observed during discovery, or a generic not found error.
 	if lastError != nil {
-		return nil, "", "", fmt.Errorf("entity '%s' not found after checking all localfs backends, last error: %w", alias, lastError)
+		return nil, "", "", lastError
 	}
-	return nil, "", "", fmt.Errorf("entity '%s' not found in any configured localfs backend", alias)
+	return nil, "", "", fmt.Errorf("entity '%s' not found in any backend", alias)
 }
 
 func init() {
 	rootCmd.AddCommand(updateCmd)
-
-	updateCmd.Flags().StringVarP(&updateTitle, "title", "t", "", "New title for the guidance entity")
-	updateCmd.Flags().StringVarP(&updateDescription, "description", "d", "", "New description for the guidance entity (provide empty string to clear)")
-	updateCmd.Flags().StringSliceVar(&addTags, "add-tag", []string{}, "Tag to add (can be specified multiple times)")
-	updateCmd.Flags().StringSliceVar(&removeTags, "remove-tag", []string{}, "Tag to remove (can be specified multiple times)")
-	// Note: Unlike create, update does not take a --backend flag. It finds the entity in existing backends.
+	// "update" command takes flags to modify metadata elements
+	updateCmd.Flags().StringVar(&updateTitle, "title", "", "New title for the guidance file")
+	updateCmd.Flags().StringVar(&updateDescription, "description", "", "New description for the guidance file")
+	updateCmd.Flags().StringSliceVar(&addTags, "add-tag", nil, "Tags to add to the guidance file (comma-separated)")
+	updateCmd.Flags().StringSliceVar(&removeTags, "remove-tag", nil, "Tags to remove from the guidance file (comma-separated)")
 }

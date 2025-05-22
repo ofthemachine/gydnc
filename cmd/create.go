@@ -9,8 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gydnc/config"
 	"gydnc/core/content" // For GuidanceContent and ToFileContent
+	"gydnc/model"
+	"gydnc/service"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -53,10 +54,17 @@ If no body is provided, a default placeholder body will be generated.`,
 		aliasOrPath := args[0]
 		// slog.Debug("Starting 'create' command", "aliasOrPath", aliasOrPath, "title", createTitle, "description", createDescription, "tags", createTags, "backend", createBackend)
 
-		cfg := config.Get() // Assumes config is loaded by rootPersistentPreRun
+		// Check if app context is initialized
+		if appContext == nil || appContext.Config == nil {
+			return fmt.Errorf("configuration not loaded; run 'gydnc init' or check config")
+		}
+
+		// Get config from app context and initialize config service
+		cfg := appContext.Config
+		configService := service.NewConfigService(appContext)
 
 		var targetBackendName string
-		var chosenBackendConfig *config.StorageConfig
+		var chosenBackendConfig *model.StorageConfig
 
 		if createBackend != "" {
 			targetBackendName = createBackend
@@ -113,11 +121,9 @@ If no body is provided, a default placeholder body will be generated.`,
 			// Resolve storeBasePath relative to the config file's directory
 			rawPathFromConfig := chosenBackendConfig.LocalFS.Path
 			if !filepath.IsAbs(rawPathFromConfig) {
-				// GetLoadedConfigActualPath() can return an empty string if config was not loaded from a file
-				// (e.g. if default config is used or set via environment).
-				// In such cases, a relative path from config should be treated as relative to CWD.
-				loadedConfigPath := config.GetLoadedConfigActualPath()
-				if loadedConfigPath != "" {
+				// Get the loaded config path using service
+				loadedConfigPath, err := configService.GetEffectiveConfigPath(cfgFile)
+				if err == nil && loadedConfigPath != "" {
 					configDir := filepath.Dir(loadedConfigPath)
 					storeBasePath = filepath.Join(configDir, rawPathFromConfig)
 				} else {
@@ -248,68 +254,69 @@ If no body is provided, a default placeholder body will be generated.`,
 			// TODO: Make title prettier (e.g., replace hyphens, underscores with spaces, capitalize)
 		}
 		description := createDescription // Default is empty if not provided
-		tags := createTags               // Default is empty if not provided
 
-		// Create an instance of StandardFrontmatter to be marshalled.
-		frontmatterData := content.StandardFrontmatter{
-			// ID:          newID, // Removed: ID is now content-addressable
+		// Use default body if none provided
+		if !bodySourceUsed || actualBodyContent == "" {
+			actualBodyContent = fmt.Sprintf("# %s\n\nGuidance content for '%s' goes here.\n", title, title)
+		}
+
+		// Create content object with metadata
+		content := content.GuidanceContent{
 			Title:       title,
 			Description: description,
-			Tags:        tags,
+			Tags:        createTags,
+			Body:        actualBodyContent,
 		}
 
-		// For the file content, we need the body.
-		// Use the title from the frontmatterData for consistency.
-		var fileBodyContent string
-		if bodySourceUsed {
-			fileBodyContent = actualBodyContent
-		} else {
-			// Default placeholder body if no explicit body is provided
-			fileBodyContent = fmt.Sprintf("# %s\n\nGuidance content for '%s' goes here.\n", frontmatterData.Title, frontmatterData.Title)
-		}
-
-		// The conceptual ID is now the SHA256 of fileBodyContent
-		// We can use the utils.Sha256 function here. For now, this is just a conceptual note.
-		// contentID := utils.Sha256([]byte(fileBodyContent))
-		// slog.Info("New guidance content ID (SHA256 of body)", "path", targetFilePath, "contentID", contentID)
-
-		frontmatterBytes, err := yaml.Marshal(&frontmatterData)
+		// Generate file content with frontmatter
+		fileContent, err := content.ToFileContent()
 		if err != nil {
-			return fmt.Errorf("failed to serialize frontmatter: %w", err)
+			return fmt.Errorf("failed to generate guidance file content: %w", err)
 		}
 
-		fileContent := append([]byte("---\n"), frontmatterBytes...)
-		fileContent = append(fileContent, []byte("---\n")...)
-		// Ensure body ends with a newline if not empty, for consistency with ToFileContent()
-		if fileBodyContent != "" && !strings.HasSuffix(fileBodyContent, "\n") {
-			fileContent = append(fileContent, []byte(fileBodyContent+"\n")...)
-		} else {
-			fileContent = append(fileContent, []byte(fileBodyContent)...)
-		}
-
-		// Write file
+		// Write to file
 		if err := os.WriteFile(targetFilePath, fileContent, 0644); err != nil {
-			return fmt.Errorf("failed to write guidance file '%s': %w", targetFilePath, err)
+			return fmt.Errorf("failed to write guidance file: %w", err)
 		}
 
-		// Get current working directory to make the output path relative
-		cwd, err := os.Getwd()
-		if err != nil {
-			// Fallback to absolute path if CWD cannot be determined, though unlikely.
-			fmt.Printf("Created guidance file: %s\n", targetFilePath)
-			// slog.Warn("Could not get CWD to make output path relative, printing absolute path", "error", err)
-		} else {
-			displayPath, relErr := filepath.Rel(cwd, targetFilePath)
-			if relErr != nil {
-				// Fallback to absolute path if Rel fails for some reason
-				fmt.Printf("Created guidance file: %s\n", targetFilePath)
-				// slog.Warn("Could not make target path relative to CWD, printing absolute path", "target", targetFilePath, "error", relErr)
+		// For test compatibility, we need to output relative paths
+		workingDir, err := os.Getwd()
+		if err == nil && strings.HasPrefix(targetFilePath, workingDir) {
+			// Output relative path for test compatibility
+			relativePath, err := filepath.Rel(workingDir, targetFilePath)
+			if err == nil {
+				fmt.Printf("Created guidance file: %s\n", relativePath)
 			} else {
-				fmt.Printf("Created guidance file: %s\n", displayPath)
+				fmt.Printf("Created guidance file: %s\n", targetFilePath)
 			}
+		} else {
+			fmt.Printf("Created guidance file: %s\n", targetFilePath)
+		}
+		// slog.Info("Successfully created guidance file", "path", targetFilePath)
+
+		// Return YAML representation of created entity for display
+		metaDisplay := struct {
+			Backend     string   `yaml:"backend"`
+			Alias       string   `yaml:"alias"`
+			Title       string   `yaml:"title"`
+			Description string   `yaml:"description"`
+			Tags        []string `yaml:"tags,omitempty"`
+			Path        string   `yaml:"path"`
+		}{
+			Backend:     targetBackendName,
+			Alias:       aliasOrPath,
+			Title:       title,
+			Description: description,
+			Tags:        createTags,
+			Path:        targetFilePath,
 		}
 
-		// slog.Info("Successfully created guidance file", "path", targetFilePath)
+		yamlData, err := yaml.Marshal(metaDisplay)
+		if err != nil {
+			return fmt.Errorf("failed to marshal entity metadata for display: %w", err)
+		}
+		fmt.Println(string(yamlData))
+
 		return nil
 	},
 	SilenceErrors: true,
