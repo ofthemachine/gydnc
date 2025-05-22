@@ -3,7 +3,7 @@ stdout:
   - match_type: ORDERED_LINES
     content: |
       # REGEX: ^Created guidance store: /.*subdir/.gydnc$
-      # REGEX: ^Created TAG_ONTOLOGY.md: /.*subdir/.gydnc/TAG_ONTOLOGY.md$
+      # REGEX: ^Created tag_ontology.md: /.*subdir/.gydnc/tag_ontology.md$
       # REGEX: ^Created configuration file: /.*subdir/.gydnc/config.yml$
       # REGEX: ^gydnc initialized successfully in /.*subdir$
       # REGEX: ^\s*export GYDNC_CONFIG="/[^"]+"\s*$
@@ -17,5 +17,5 @@ filesystem:
   - path: "subdir/.gydnc"
     exists: true
     is_dir: true
-  - path: "subdir/.gydnc/TAG_ONTOLOGY.md"
+  - path: "subdir/.gydnc/tag_ontology.md"
     exists: true

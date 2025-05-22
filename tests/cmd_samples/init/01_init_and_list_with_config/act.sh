@@ -2,7 +2,7 @@
 set -e # Exit on first error
 
 # Initialize gydnc in the current directory (which will be the temp test directory)
-# This will now create .gydnc/config.yml and .gydnc/TAG_ONTOLOGY.md
+# This will now create .gydnc/config.yml and .gydnc/tag_ontology.md
 ./gydnc init .
 
 # Run 'gydnc list' using the generated config file

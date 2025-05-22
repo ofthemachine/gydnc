@@ -59,11 +59,6 @@ You can specify the output format using the --output flag:
 - body: Displays only the Markdown body content.`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Set isJSONMode for machine-readable output
-		if outputFormatGet == "structured" || outputFormatGet == "json-frontmatter" {
-			isJSONMode = true
-		}
-
 		idsToGet := args
 		backend, _ := GetActiveBackend()
 		if backend == nil {

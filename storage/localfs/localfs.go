@@ -82,6 +82,11 @@ func (s *Store) GetName() string {
 	return s.name
 }
 
+// SetName sets the name of the backend instance.
+func (s *Store) SetName(name string) {
+	s.name = name
+}
+
 // GetBasePath returns the root path of this localfs store.
 func (s *Store) GetBasePath() string {
 	return s.basePath
@@ -247,4 +252,16 @@ func (s *Store) List(prefix string) ([]string, error) {
 // Add IsWritable method to satisfy the new Backend interface
 func (s *Store) IsWritable() bool {
 	return true
+}
+
+// Capabilities returns a map of capability names to boolean values.
+// This allows for feature detection and future extensibility.
+func (s *Store) Capabilities() map[string]bool {
+	return map[string]bool{
+		"write":  true,
+		"delete": true,
+		"list":   true,
+		"read":   true,
+		"stat":   true,
+	}
 }

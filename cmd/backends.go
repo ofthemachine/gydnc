@@ -103,3 +103,44 @@ func InitActiveBackend() error {
 func GetActiveBackend() (storage.Backend, string) { // Return name as well
 	return activeBackend, activeBackendName
 }
+
+// InitializeBackendFromConfig initializes a backend from the provided configuration
+func InitializeBackendFromConfig(backendName string, backendConfig *config.StorageConfig) (storage.Backend, error) {
+	if backendConfig == nil {
+		return nil, fmt.Errorf("backend configuration is nil")
+	}
+
+	if backendConfig.Type != "localfs" {
+		return nil, fmt.Errorf("backend '%s' has an unsupported type '%s'", backendName, backendConfig.Type)
+	}
+
+	if backendConfig.LocalFS == nil {
+		return nil, fmt.Errorf("localfs configuration for backend '%s' is missing", backendName)
+	}
+
+	// Resolve the path if it's relative to the config file's directory
+	cfgPath := config.GetLoadedConfigActualPath()
+	resolvedPath := backendConfig.LocalFS.Path
+
+	if !filepath.IsAbs(resolvedPath) && cfgPath != "" {
+		configFileDir := filepath.Dir(cfgPath)
+		resolvedPath = filepath.Join(configFileDir, resolvedPath)
+	}
+
+	// Create a new LocalFSConfig with the resolved path
+	storeSpecificConfig := config.LocalFSConfig{Path: resolvedPath}
+
+	localStore, err := localfs.NewStore(storeSpecificConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new localfs store for backend '%s': %w", backendName, err)
+	}
+
+	if err := localStore.Init(nil); err != nil {
+		return nil, fmt.Errorf("failed to initialize localfs store for backend '%s': %w", backendName, err)
+	}
+
+	// Set the name of the store
+	localStore.SetName(backendName)
+
+	return localStore, nil
+}

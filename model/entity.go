@@ -11,5 +11,11 @@ type Entity struct {
 	CustomMetadata map[string]interface{} `json:"custom_metadata,omitempty"` // All other frontmatter fields
 	Body           string                 `json:"body,omitempty"`            // The body content of the guidance, after frontmatter
 
+	// Content ID - a deterministic hash of the content
+	// Used for conflict detection and resolution
 	CID string `json:"-"` // Internal content ID, not surfaced in CLI output
+
+	// Parent Content ID - points to the previous version of this entity
+	// Used for conflict resolution and history tracking
+	PCID string `json:"-"` // Parent content ID, not surfaced in CLI output
 }

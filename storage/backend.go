@@ -10,6 +10,11 @@ type ReadOnlyBackend interface {
 	Stat(id string) (map[string]interface{}, error)
 	// GetName returns a unique name for the backend implementation (e.g., "localfs", "git").
 	GetName() string
+	// IsWritable returns true if this backend supports write operations.
+	IsWritable() bool
+	// Capabilities returns a map of capability names to boolean values.
+	// This allows for feature detection and future extensibility.
+	Capabilities() map[string]bool
 }
 
 // Backend defines the interface for writable guidance storage backends.

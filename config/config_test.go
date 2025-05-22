@@ -9,20 +9,15 @@ import (
 func TestConfigLoadPriority(t *testing.T) {
 	// Create a temporary directory structure for testing
 	tmpDir := t.TempDir()
-	homeDir := filepath.Join(tmpDir, "home")
 	workDir := filepath.Join(tmpDir, "work")
 
 	// Create directories
-	if err := os.MkdirAll(filepath.Join(homeDir, ".gydnc"), 0755); err != nil {
-		t.Fatal(err)
-	}
 	if err := os.MkdirAll(filepath.Join(workDir, ".gydnc"), 0755); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create test config files with different content to identify which one is loaded
 	configs := map[string]string{
-		filepath.Join(homeDir, ".gydnc/config.yml"):  "default_backend: home",
 		filepath.Join(tmpDir, "explicit_config.yml"): "default_backend: explicit",
 		filepath.Join(tmpDir, "env_var_config.yml"):  "default_backend: envvar",
 	}
@@ -40,40 +35,38 @@ func TestConfigLoadPriority(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(originalWd) }()
 
-	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
-
 	// Change to the test working directory
 	if err := os.Chdir(workDir); err != nil {
 		t.Fatal(err)
 	}
-
-	// Set test home directory
-	os.Setenv("HOME", homeDir)
 
 	tests := []struct {
 		name          string
 		cliArg        string
 		envVar        string
 		expectedValue string
+		expectError   bool
 	}{
 		{
 			name:          "CLI argument takes precedence",
 			cliArg:        filepath.Join(tmpDir, "explicit_config.yml"),
 			envVar:        filepath.Join(tmpDir, "env_var_config.yml"),
 			expectedValue: "explicit",
+			expectError:   false,
 		},
 		{
-			name:          "Environment variable is second priority",
+			name:          "Environment variable is used if CLI arg not provided",
 			cliArg:        "",
 			envVar:        filepath.Join(tmpDir, "env_var_config.yml"),
 			expectedValue: "envvar",
+			expectError:   false,
 		},
 		{
-			name:          "Home directory is last priority",
+			name:          "Error when no CLI arg or env var provided",
 			cliArg:        "",
 			envVar:        "",
-			expectedValue: "home",
+			expectedValue: "",
+			expectError:   true,
 		},
 	}
 
@@ -86,20 +79,16 @@ func TestConfigLoadPriority(t *testing.T) {
 				os.Unsetenv("GYDNC_CONFIG")
 			}
 
-			// For the home directory fallback test, remove the CWD .gydnc/config.yml
-			if tt.name == "Home directory is last priority" {
-				t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
-				// For this specific test case, also ensure GYDNC_CONFIG is NOT set
-				t.Setenv("GYDNC_CONFIG", "") // Unset it explicitly for the test
-
-				// TODO: This if block was empty and caused a linting error (SA9003: empty branch).
-				// If there was intended logic here, it needs to be implemented.
-				// if tt.name == "Home directory is last priority" {
-				// }
-			}
-
 			// Load config
 			cfg, err := Load(tt.cliArg, false)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Load() expected error but got nil")
+				}
+				return
+			}
+
 			if err != nil {
 				t.Fatalf("Load() error = %v", err)
 			}
@@ -122,31 +111,22 @@ func TestConfigLoadNoConfig(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(originalWd) }()
 
-	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
-
-	// Change to the test directory and set it as home
+	// Change to the test directory
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatal(err)
 	}
-	os.Setenv("HOME", tmpDir)
 	os.Unsetenv("GYDNC_CONFIG")
 
-	// Load config with no files present
+	// Load config with no files present - should error
 	cfg, err := Load("", false)
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+
+	// Verify an error is returned
+	if err == nil {
+		t.Error("Load() should have returned an error when no config provided")
 	}
 
-	if cfg == nil {
-		t.Error("Load() returned nil config")
-		return
-	}
-	if cfg.StorageBackends == nil {
-		t.Error("Load() returned config with nil StorageBackends")
-		return
-	}
-	if len(cfg.StorageBackends) != 0 {
-		t.Error("Load() returned config with non-empty StorageBackends")
+	// Verify the config is nil
+	if cfg != nil {
+		t.Error("Load() should have returned nil config when no config provided")
 	}
 }

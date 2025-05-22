@@ -11,7 +11,7 @@ stderr:
 filesystem:
   - path: "subdir_cfg_create/.gydnc/config.yml"
     exists: true
-  - path: "subdir_cfg_create/.gydnc/TAG_ONTOLOGY.md"
+  - path: "subdir_cfg_create/.gydnc/tag_ontology.md"
     exists: true
   - path: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
     exists: true

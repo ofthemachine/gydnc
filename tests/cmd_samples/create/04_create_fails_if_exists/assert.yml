@@ -3,7 +3,7 @@ stdout:
   - match_type: ORDERED_LINES
     content: |
       # REGEX: ^Created guidance store: /.*/.gydnc$
-      # REGEX: ^Created TAG_ONTOLOGY.md: /.*/.gydnc/TAG_ONTOLOGY.md$
+      # REGEX: ^Created tag_ontology.md: /.*/.gydnc/tag_ontology.md$
       # REGEX: ^Created configuration file: /.*/.gydnc/config.yml$
       # REGEX: ^gydnc initialized successfully in /.*$
       # REGEX: ^$

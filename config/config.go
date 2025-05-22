@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"log/slog"
 
@@ -61,8 +60,8 @@ func NewDefaultConfig() *Config {
 }
 
 // Load reads the configuration from the specified path or environment variable.
-// If requireConfig is true, it will return an error if no config file is found.
-// If requireConfig is false, it will return a default config if no file is found (for bootstrap commands).
+// A configuration must be explicitly provided either via CLI argument or environment variable.
+// If no configuration file is found, an error is returned.
 func Load(cliConfigPath string, requireConfig bool) (*Config, error) {
 	configFilePath := cliConfigPath
 
@@ -70,30 +69,11 @@ func Load(cliConfigPath string, requireConfig bool) (*Config, error) {
 		configFilePath = os.Getenv("GYDNC_CONFIG")
 	}
 
-	// If still no path, try ~/.gydnc/config.yml
+	// If no configuration file path is provided, always return an error
 	if configFilePath == "" {
-		homeDir, err := os.UserHomeDir()
-		if err == nil {
-			homeGydncPath := filepath.Join(homeDir, ".gydnc", "config.yml")
-			if _, err := os.Stat(homeGydncPath); err == nil {
-				configFilePath = homeGydncPath
-				slog.Debug("No explicit config path, using ~/.gydnc/config.yml", "path", configFilePath)
-			}
-		}
-	}
-
-	if configFilePath == "" {
-		if requireConfig {
-			// Do NOT set globalConfig if a config is required and not found
-			globalConfig = nil // Explicitly clear
-			loadedConfigActualPath = ""
-			return nil, fmt.Errorf("no config file found and a config is required")
-		}
-		slog.Debug("No configuration file path specified or found, using default configuration.")
-		cfg := NewDefaultConfig()
-		globalConfig = cfg
-		loadedConfigActualPath = "" // Explicitly clear if using default
-		return cfg, nil
+		globalConfig = nil // Explicitly clear
+		loadedConfigActualPath = ""
+		return nil, fmt.Errorf("no config file found - configuration must be explicitly provided via CLI arg or GYDNC_CONFIG env var")
 	}
 
 	slog.Debug("Attempting to load configuration from", "path", configFilePath)
@@ -101,30 +81,16 @@ func Load(cliConfigPath string, requireConfig bool) (*Config, error) {
 
 	data, err := os.ReadFile(configFilePath)
 	if err != nil {
-		if requireConfig {
-			globalConfig = nil // Explicitly clear
-			loadedConfigActualPath = ""
-			return nil, fmt.Errorf("failed to read config file %s: %w", configFilePath, err)
-		}
-		slog.Warn("Failed to read config file, using default configuration.", "path", configFilePath, "error", err)
-		cfg := NewDefaultConfig()
-		globalConfig = cfg
-		loadedConfigActualPath = "" // Using defaults, so no "actual loaded path"
-		return cfg, fmt.Errorf("failed to read config file %s: %w Using default config", configFilePath, err)
+		globalConfig = nil // Explicitly clear
+		loadedConfigActualPath = ""
+		return nil, fmt.Errorf("failed to read config file %s: %w", configFilePath, err)
 	}
 
 	cfgFromFile, err := LoadConfigFromString(string(data))
 	if err != nil {
-		if requireConfig {
-			globalConfig = nil // Explicitly clear
-			loadedConfigActualPath = ""
-			return nil, fmt.Errorf("failed to parse config file %s: %w", configFilePath, err)
-		}
-		slog.Warn("Failed to parse config file, using default configuration.", "path", configFilePath, "error", err)
-		cfg := NewDefaultConfig()
-		globalConfig = cfg
-		loadedConfigActualPath = "" // Using defaults, so no "actual loaded path"
-		return cfg, fmt.Errorf("failed to parse config file %s: %w. Using default config", configFilePath, err)
+		globalConfig = nil // Explicitly clear
+		loadedConfigActualPath = ""
+		return nil, fmt.Errorf("failed to parse config file %s: %w", configFilePath, err)
 	}
 
 	globalConfig = cfgFromFile
