@@ -2,147 +2,175 @@
 
 This document outlines how an LLM should interact with the `gydnc` CLI to manage and retrieve guidance.
 
-## Standard Interaction Flow:
+## 🚨 CRITICAL: Start Every Session With This
 
-1.  **List Available Guidance (Aliases and CIDs):**
-    Run the command:
-    ```bash
-    gydnc list
-    ```
-    This will output a list of known guidance aliases, their current CIDs, titles, and tags.
-
-    *To filter by tags or other metadata:*
-    ```bash
-    gydnc list --filter "type:behavior scope:core tier:must"
-    ```
-
-2.  **Identify Relevant Alias or CID:**
-    Analyze the output from `gydnc list`. Based on the current task, identify the relevant alias (e.g., `core-safety`) or a specific CID if a particular version is needed.
-
-3.  **Fetch Full Guidance Content:**
-    To get the latest version of an alias:
-    ```bash
-    gydnc get <alias_name>
-    ```
-    Example:
-    ```bash
-    gydnc get core-safety
-    ```
-
-    To get a specific version by CID:
-    ```bash
-    gydnc get <CID>
-    ```
-    Example:
-    ```bash
-    gydnc get sha256-abcdef123456...
-    ```
-
-    To get a specific version of an alias (e.g., a previous version or one from a Git ref):
-    ```bash
-    gydnc get <alias_name> --version <target_CID | "previous" | git_ref>
-    ```
-    Example:
-    ```bash
-    gydnc get core-safety --version "previous"
-    gydnc get core-safety --version "main~1"
-    ```
-
-4.  **Proceed with Task:**
-    Use the full guidance content (metadata and body) obtained in step 3 to guide the execution of the task.
-
-## Creating New Guidance:
-
-Command Structure:
+**MANDATORY FIRST STEP - NEVER SKIP:**
 ```bash
-gydnc create guidance --alias <alias_name> --title "<Title>" --tags "<tag1,tag2>" [--body-from-file <path> | pipe body to stdin] [--reason "<change_reason>"]
-```
--   `--alias <alias_name>`: A unique, human-readable alias for the new guidance.
--   `--title "<Title>"`: The title for the guidance.
--   `--tags "<tag1,tag2>"`: Comma-separated tags (e.g., "type:recipe,scope:api").
--   Body content can be provided by piping to `stdin` or from a file.
--   `--reason "<change_reason>"`: Optional reason for creating this guidance.
-
-Example:
-```bash
-echo "### Section 1..." | gydnc create guidance --alias "new-guidance" --title "My New Guidance" --tags "type:recipe,scope:api" --reason "Initial draft"
+gydnc list --json
 ```
 
-## Updating Existing Guidance:
+❌ **NEVER do these mistakes:**
+- Skip the overview command
+- Run `gydnc init` (assume configuration exists)
+- Start creating without understanding what guidance exists
 
-Command Structure:
+## Core Commands Overview
+
+| Command | Purpose |
+|---------|---------|
+| `init` | Initialize a new gydnc repository (rarely needed) |
+| `list` | Show all available guidance entities |
+| `get` | Retrieve guidance content |
+| `create` | Create new guidance |
+| `update` | Update existing guidance |
+
+## Standard Workflow:
+
+### 1. List Available Guidance
 ```bash
-gydnc update <alias_or_CID> [--title "<New Title>"] [--tags-add "<tag_to_add>"] [--tags-remove "<tag_to_remove>"] [--body-from-file <path> | pipe body to stdin] [--reason "<change_reason>"]
+gydnc list --json
 ```
--   `<alias_or_CID>`: The alias or CID of the guidance to update.
--   Flags are used to specify which parts to update.
--   Updating creates a new version with a new CID. The original remains accessible via its CID.
--   If an alias is provided, it will point to the newly created version.
+This shows all available guidance with metadata.
 
-Example:
+### 2. Get Guidance Content
 ```bash
-echo "## Updated Body" | gydnc update core-safety --title "Core Safety Protocol v2" --tags-add "status:revised" --reason "Annual review update"
+gydnc get <alias>                    # Default structured format
+gydnc get <alias> --output body      # Just the content
+gydnc get <alias> --output json      # Full metadata + content
 ```
 
-## Other Useful Commands:
-
-*   **`gydnc cid <alias_or_content>`**: Calculate CID for an alias's current version or for content piped in.
-    ```bash
-    gydnc cid core-safety
-    echo "## Some content" | gydnc cid
-    ```
-
-*   **`gydnc link <alias> <CID>`**: Make an alias point to a specific CID.
-    ```bash
-    gydnc link stable-release sha256-xxxxxyyyyzzzz...
-    ```
-
-*   **`gydnc log <alias>`**: Show version history for an alias (uses Git log and pCID chain).
-    ```bash
-    gydnc log core-safety
-    ```
-
-*   **`gydnc verify <alias_or_CID>`**: Verify integrity of guidance content and pCID chain.
-    ```bash
-    gydnc verify core-safety
-    gydnc verify sha256-xxxxxyyyyzzzz...
-    ```
-
-Adhere to the specific command flags and structures as detailed in the `gydnc` help output for each command.
-Always ensure you are using the correct alias or CID for operations.
-The `gydnc` system relies on content-addressability, so "updates" result in new CIDs.
-The `pCID` field in a guidance entity's metadata links it to its previous version.
-
-## Practical Advice for 'create' and 'get' Commands
-
-- When creating guidance, prefer providing the body via stdin (using a here-document or pipe) to ensure real newlines are preserved. Avoid using the --body flag for multi-line content in scripts/tests.
-- In automation or tests, suppress the output of the 'create' command (redirect to /dev/null) if you only care about the entity content, not the creation confirmation.
-- To verify or assert on the created entity, use 'gydnc get <alias>' and assert on its output (JSON/YAML/body), not on file content or raw stdout from 'create'.
-- The output of 'gydnc get' in JSON/YAML/body mode is machine-readable and should not include extra summary or list output.
-
-### Example: Canonical Script for Creation and Verification
-
+**Batch Retrieval (PREFERRED):**
 ```bash
-./gydnc init > /dev/null
-export GYDNC_CONFIG="$(pwd)/.gydnc/config.yml"
-cat <<EOF | ./gydnc create my-entity --title "my-entity" > /dev/null
-# my-entity
+gydnc get entity1 entity2 entity3
+```
 
-Guidance content for 'my-entity' goes here.
+### 3. Create New Guidance
+
+✅ **CORRECT Pattern (here-document):**
+```bash
+cat << 'EOF' | gydnc create <alias> --title "Title" --tags "tag1,tag2"
+# Your content here
+Multiple lines work perfectly
+Code blocks are preserved
+EOF
+```
+
+✅ **ALSO EFFECTIVE (temp file):**
+```bash
+# Write content to temp file, then pipe it
+cat temp-content.md | gydnc create <alias> --title "Title" --tags "tag1,tag2"
+```
+
+#### Alias Hierarchy and Organization
+
+**Use hierarchical aliases to organize guidance logically:**
+
+| Category | Pattern | Example | Purpose |
+|----------|---------|---------|---------|
+| Must | `must/<topic>` | `must/safety-first` | Mandatory guidance |
+| Should | `should/<topic>` | `should/code-style` | Recommended practices |
+| Recipes | `recipes/<domain>/<action>` | `recipes/blog/post-creation` | Step-by-step procedures |
+| Process | `process/<workflow>` | `process/migration/cursor-rules-to-gydnc` | Workflow guidance |
+
+**Examples of hierarchical creation:**
+```bash
+# Mandatory safety guidance
+cat << 'EOF' | gydnc create must/data-validation --title "Data Validation Requirements" --tags "type:requirement,scope:security"
+# Data Validation Requirements
+All user input must be validated...
 EOF
 
-./gydnc get my-entity
+# Development recipe
+cat << 'EOF' | gydnc create recipes/testing/unit-test-setup --title "Unit Test Setup Guide" --tags "type:recipe,domain:testing"
+# Unit Test Setup Guide
+Steps to configure unit testing...
+EOF
+
+# Process guidance
+cat << 'EOF' | gydnc create process/release/version-tagging --title "Version Tagging Process" --tags "type:process,scope:release"
+# Version Tagging Process
+How to tag releases properly...
+EOF
 ```
 
-### Example: Canonical Assertion (YAML)
+❌ **AVOID:** Using `--body` flag for multi-line content
 
-```yaml
-stdout:
-  - match_type: JSON
-    content: |
-      {
-        "title": "my-entity",
-        "body": "# my-entity\n\nGuidance content for 'my-entity' goes here.\n"
-      }
-stderr: []
+### 4. Update Existing Guidance
+
+✅ **CORRECT Pattern (here-document):**
+```bash
+cat << 'EOF' | gydnc update <alias>
+# Updated content here
+EOF
 ```
+
+✅ **ALSO EFFECTIVE (temp file):**
+```bash
+# Write content to temp file, then pipe it
+cat updated-content.md | gydnc update <alias>
+```
+
+## 🛠 Troubleshooting Common Issues
+
+### "No such file or directory" when piping
+**Problem:** File path resolution issues
+**Solution:** Use here-documents (`cat << 'EOF'`) instead of file references
+
+### "Active backend not initialized"
+**Problem:** Missing configuration or wrong directory
+**Solution:** Ensure proper GYDNC_CONFIG or run `gydnc init` if needed
+
+### Empty content after creation
+**Problem:** Content didn't pipe correctly
+**Solution:** Use the exact here-document pattern shown above
+
+### Session configuration issues
+**Problem:** Environment variables not loaded
+**Solution:** Source user profile: `source ~/.zshrc`
+
+## 📋 Command Reference
+
+| Task | Command Pattern |
+|------|----------------|
+| List all | `gydnc list --json` |
+| Get content | `gydnc get <alias>` |
+| Create new | `cat << 'EOF' \| gydnc create must/topic --title "Title" --tags "tags"` |
+| Update existing | `cat << 'EOF' \| gydnc update recipes/domain/action` |
+
+## 🎯 Session Best Practices
+
+1. **Always start:** `gydnc list --json`
+2. **Identify relevant:** Look for existing guidance before creating
+3. **Retrieve details:** `gydnc get <relevant-aliases>`
+4. **Adapt as needed:** Re-fetch when conversation evolves
+5. **Create/update:** Use proper stdin patterns with here-documents
+6. **Batch operations:** Get multiple entities in one command
+7. **Assume config exists:** Don't run init unnecessarily
+
+### Example: Complete Workflow
+
+```bash
+# 1. Start with overview (MANDATORY)
+gydnc list --json
+
+# 2. Get relevant guidance
+gydnc get must/safety-first should/code-style
+
+# 3. Create new guidance if needed
+cat << 'EOF' | gydnc create recipes/api/error-handling --title "API Error Handling Guide" --tags "type:recipe,domain:api"
+# API Error Handling Guide
+
+## Overview
+Best practices for handling errors in API responses...
+
+## Implementation Steps
+1. Define error response schema
+2. Implement consistent error codes
+3. Add proper logging
+EOF
+
+# 4. Verify creation
+gydnc get recipes/api/error-handling --output body
+```
+
+Follow these patterns and you'll have smooth gydnc interactions every time! 🚀

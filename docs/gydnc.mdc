@@ -41,24 +41,64 @@ ALWAYS follow this sequence to ensure you have comprehensive guidance:
 ### 2. Guidance Creation Workflow
 When creating new guidance entities:
 
-1. **CAPTURE EXISTING CONTENT:** Use stdin piping to create guidance from existing content:
-    ```bash
-    # Pipe content directly into a new guidance entity
-    cat existing-content.md | gydnc create --title "Title" --description "Description" --tags "tech:git,lang:go,repo:agentt" <alias>
-    ```
-    This is the PREFERRED method for creating guidance with existing content.
+1. **PREFERRED PATTERNS:** Use these proven methods for content creation:
 
-2. **COMPLETE METADATA:** Always include comprehensive metadata when creating:
+   **Here-document pattern (inline content):**
     ```bash
-    # Create with full metadata
-    gydnc create --title "Comprehensive Title" --description "Detailed description" --tags "lang:go,repo:backend,core:must" <alias>
+    cat << 'EOF' | gydnc create <alias> --title "Title" --tags "tag1,tag2"
+    # Your content here
+    Multiple lines work perfectly
+    Code blocks are preserved
+    EOF
     ```
 
-3. **USE HIERARCHICAL ORGANIZATION:** Organize guidance in logical hierarchies:
+   **Temp file pattern (complex content):**
     ```bash
-    # Create entity in appropriate category structure
-    gydnc create development/backend/api-design/<entity-name>
+    # Write content to temp file, then pipe it
+    cat temp-content.md | gydnc create <alias> --title "Title" --tags "tag1,tag2"
     ```
+
+2. **AVOID PROBLEMATIC PATTERNS:**
+   - ❌ NEVER use `--body` flag for multi-line content
+   - ❌ NEVER skip the mandatory `gydnc list --json` first step
+   - ❌ NEVER run `gydnc init` unless explicitly needed (assume configuration exists)
+
+3. **COMPLETE METADATA:** Always include comprehensive metadata when creating:
+    ```bash
+    gydnc create <alias> --title "Title" --description "Description" --tags "type:recipe,scope:core"
+    ```
+
+### 2a. Alias Hierarchy and Organization
+
+**Use hierarchical aliases to organize guidance logically:**
+
+| Category | Pattern | Example | Purpose |
+|----------|---------|---------|---------|
+| Must | `must/<topic>` | `must/safety-first` | Mandatory guidance |
+| Should | `should/<topic>` | `should/code-style` | Recommended practices |
+| Recipes | `recipes/<domain>/<action>` | `recipes/blog/post-creation` | Step-by-step procedures |
+| Process | `process/<workflow>` | `process/migration/cursor-rules-to-gydnc` | Workflow guidance |
+
+**Examples of hierarchical creation:**
+```bash
+# Mandatory safety guidance
+cat << 'EOF' | gydnc create must/data-validation --title "Data Validation Requirements" --tags "type:requirement,scope:security"
+# Data Validation Requirements
+All user input must be validated...
+EOF
+
+# Development recipe
+cat << 'EOF' | gydnc create recipes/testing/unit-test-setup --title "Unit Test Setup Guide" --tags "type:recipe,domain:testing"
+# Unit Test Setup Guide
+Steps to configure unit testing...
+EOF
+
+# Process guidance
+cat << 'EOF' | gydnc create process/release/version-tagging --title "Version Tagging Process" --tags "type:process,scope:release"
+# Version Tagging Process
+How to tag releases properly...
+EOF
+```
 
 ### 3. Adaptive Guidance Retrieval
 As the user's needs evolve during a conversation:
@@ -71,16 +111,25 @@ As the user's needs evolve during a conversation:
 2. **PROACTIVE RETRIEVAL:** When the conversation shifts, proactively fetch new guidance:
     ```bash
     # When conversation shifts to implementation details
-    gydnc get implementation/best-practices
+    gydnc get must/safety-first should/code-style
 
     # When user requests a specific output format
-    gydnc get content/blog-writing-guide
+    gydnc get recipes/blog/post-creation
     ```
 
 3. **VERIFICATION:** After fetching new guidance, verify it addresses the user's evolving needs before proceeding.
 
 ### 4. Command Syntax Reference
 
+**Core Commands:**
+| Command | Purpose |
+|---------|---------|
+| `list` | Show all available guidance entities |
+| `get` | Retrieve guidance content |
+| `create` | Create new guidance |
+| `update` | Update existing guidance |
+
+**Essential Patterns:**
 1. **Overview Retrieval (MANDATORY):**
     ```bash
     gydnc list --json
@@ -91,19 +140,49 @@ As the user's needs evolve during a conversation:
     gydnc get <entity1> [<entity2> ...]
     ```
 
-3. **Guidance Creation with Piped Content:**
+3. **Guidance Creation with Here-document:**
     ```bash
-    cat content.md | gydnc create --title "Title" --tags "lang:go,repo:agentt" <alias>
+    cat << 'EOF' | gydnc create <alias> --title "Title" --tags "tag1,tag2"
+    # Content here
+    EOF
     ```
 
-4. **Guidance Creation with Direct Content:**
+4. **Guidance Creation with Temp File:**
     ```bash
-    gydnc create --title "Title" --description "Description" --tags "tech:git,os:linux" --body "# Content" <alias>
+    cat content.md | gydnc create <alias> --title "Title" --tags "tag1,tag2"
     ```
+
+5. **Guidance Update:**
+    ```bash
+    cat << 'EOF' | gydnc update <alias>
+    # Updated content here
+    EOF
+    ```
+
+### 5. Troubleshooting Common Issues
+
+**"No such file or directory" when piping:**
+- Problem: File path resolution issues
+- Solution: Use here-documents (`cat << 'EOF'`) or ensure temp files exist
+
+**"Active backend not initialized":**
+- Problem: Missing configuration or wrong directory
+- Solution: Ensure proper GYDNC_CONFIG or source user profile: `source ~/.zshrc`
+
+**Empty content after creation:**
+- Problem: Content didn't pipe correctly
+- Solution: Use the exact here-document pattern shown above
+
+**Session configuration issues:**
+- Problem: Environment variables not loaded
+- Solution: Start fresh terminal or source profile
 
 ## Notes
+- **ALWAYS start with `gydnc list --json`** - This is mandatory for understanding available guidance
 - The full guidance content is critical for understanding context and requirements
 - Never rely solely on the overview - always retrieve full guidance with `gydnc get`
+- Batch retrieval is preferred - get multiple entities in one command
 - As user requests evolve (e.g., "write a blog about this"), retrieve appropriate additional guidance
 - The most common error is failing to adapt and fetch new guidance as the conversation progresses
+- Assume configuration exists - don't run `gydnc init` unless explicitly needed
 - When in doubt, check for more comprehensive guidance that might be available

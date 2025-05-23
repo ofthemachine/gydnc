@@ -1,26 +1,43 @@
-# Basic Makefile for Agent Guidance Service
+# Makefile for gydnc
 
-.PHONY: all build test fmt lint clean
+.PHONY: all build test fmt lint clean version-info help
 
 BINARY_NAME=gydnc
+VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo "v0.0.0-dev")
+COMMIT_SHA ?= $(shell git rev-parse HEAD)
+SHORT_SHA ?= $(shell git rev-parse --short=7 HEAD)
+BUILD_TIME ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# Build flags
+LDFLAGS = -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT_SHA) -X main.buildTime=$(BUILD_TIME)
 
 all: build
 
-build: fmt lint
+help: ## Show this help message
+	@echo "Available targets:"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+version-info: ## Display version information
+	@echo "Version: $(VERSION)"
+	@echo "Commit: $(COMMIT_SHA)"
+	@echo "Short SHA: $(SHORT_SHA)"
+	@echo "Build Time: $(BUILD_TIME)"
+
+build: fmt lint ## Build the binary for current platform
 	@echo "Building $(BINARY_NAME)..."
-	go build -o $(BINARY_NAME) .
+	@PLATFORM=$$(go env GOOS)-$$(go env GOARCH); \
+	VERSION_WITH_BUILD="$(VERSION)+sha.$(SHORT_SHA).$${PLATFORM}"; \
+	echo "$${VERSION_WITH_BUILD}" > cmd/version.txt; \
+	go build -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) .
 	@echo "Binary: $(BINARY_NAME)"
+	@./$(BINARY_NAME) version
 
-# Remove old server and cli targets
-# server: fmt lint ...
-# cli: fmt lint ...
-
-test:
+test: ## Run unit tests
 	@echo "Running unit tests..."
 	go test ./...
 
 .PHONY: test-integration
-test-integration:
+test-integration: ## Run integration tests
 	@echo "Running integration tests..."
 	@if [ -n "$(DIR)" ]; then \
 		echo "Filtering integration tests to directory: $(DIR)"; \
@@ -29,16 +46,19 @@ test-integration:
 		go test ./tests -v -tags=integration; \
 	fi
 
-fmt:
+fmt: ## Format code
 	@echo "Formatting code..."
 	go fmt ./...
 
-lint:
+lint: ## Lint code
 	@echo "Linting code... (requires golangci-lint)"
 	@golangci-lint run || echo "Warning: golangci-lint not found or lint errors detected."
 
-clean:
+clean: ## Clean build artifacts
 	@echo "Cleaning build artifacts..."
-	rm -f $(BINARY_NAME) $(BINARY_NAME)-server-tmp $(BINARY_NAME)-cli-tmp # Keep cleaning old temp files just in case
-	rm -f $(BINARY_NAME) # Clean the new binary
+	rm -f $(BINARY_NAME)
 	go clean
+
+install: build ## Install binary to GOPATH/bin
+	@echo "Installing $(BINARY_NAME) to $(shell go env GOPATH)/bin..."
+	cp $(BINARY_NAME) $(shell go env GOPATH)/bin/

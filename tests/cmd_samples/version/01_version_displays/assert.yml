@@ -1,8 +1,6 @@
 exit_code: 0
 stdout:
   - match_type: SUBSTRING
-    content: "dev-version"
-stderr:
-  - match_type: SUBSTRING # Allow for potential info/debug logs, but should be empty for version
-    content: ""
-filesystem: [] # No filesystem changes expected
+    content: "v"
+stderr: []
+filesystem: []
