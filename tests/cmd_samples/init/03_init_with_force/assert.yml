@@ -1,0 +1,31 @@
+exit_code: 0
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      === First initialization ===
+      # REGEX: ^Created guidance store: .*\.gydnc$
+      # REGEX: ^Created tag_ontology.md: .*\.gydnc/tag_ontology.md$
+      # REGEX: ^Created configuration file: .*\.gydnc/config.yml$
+      # REGEX: ^gydnc initialized successfully in .*$
+      Available guidance entities:
+        Found 1 entities in backend: default_local
+
+      === Second initialization without --force (should fail) ===
+      Second init without --force failed as expected
+      === Third initialization with --force (should succeed) ===
+      # REGEX: ^Created guidance store: .*\.gydnc$
+      # REGEX: ^Created tag_ontology.md: .*\.gydnc/tag_ontology.md$
+      # REGEX: ^Created configuration file: .*\.gydnc/config.yml$
+      # REGEX: ^gydnc initialized successfully in .*$
+      === Verify list still works after force init ===
+      Available guidance entities:
+        Found 1 entities in backend: default_local
+stderr: []
+filesystem:
+  - path: ".gydnc"
+    exists: true
+    is_dir: true
+  - path: ".gydnc/config.yml"
+    exists: true
+  - path: ".gydnc/tag_ontology.md"
+    exists: true
