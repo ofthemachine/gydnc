@@ -1,12 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-./gydnc init
+./gydnc init > /dev/null
 export GYDNC_CONFIG="$(pwd)/.gydnc/config.yml"
 
-cat <<EOF | ./gydnc create my-entity
-This is the body.
-With a newline.
-EOF
+# Create entity using --title and --body flags
+./gydnc create flag_body_test --title "Flag Body Test" --body "Body from flag" > /dev/null
 
-./gydnc get my-entity
+# Get the entity; this output is checked by assert.yml
+./gydnc --output json get flag_body_test

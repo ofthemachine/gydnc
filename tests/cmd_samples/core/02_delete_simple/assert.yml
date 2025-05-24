@@ -2,34 +2,27 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      Created guidance simple-delete-test on default_local
-      Created guidance subdir/simple-delete-test on default_local
       .gydnc/
       .gydnc/config.yml
       .gydnc/simple-delete-test.g6e
       .gydnc/subdir
       .gydnc/subdir/simple-delete-test.g6e
       .gydnc/tag_ontology.md
-      No matching entities found to delete.
-      Not found: simple-delete-test
-      No matching entities found to delete.
-      Not found: subdir/simple-delete-test
-      # REGEX: Found 2 entities in backend: default_local
-stderr: []
+      []
+stderr:
+  - match_type: ORDERED_LINES
+    content: |
+        level=INFO msg="Successfully created guidance." alias=simple-delete-test backend=default_local
+        level=INFO msg="Successfully created guidance." alias=subdir/simple-delete-test backend=default_local
+        level=INFO msg="Entities deleted." items="[simple-delete-test (backend: default_local)]"
+        level=INFO msg="Entities deleted." items="[subdir/simple-delete-test (backend: default_local)]"
+        level=INFO msg="No guidance entities found across all configured backends post-delete."
 filesystem:
   - path: .gydnc/simple-delete-test.g6e
-    exists: true
-    match_type: EXACT
-    content: |
-      ---
-      title: Delete Me
-      ---
-      This will be deleted.
+    exists: false # Deleted from first store
   - path: .gydnc/subdir/simple-delete-test.g6e
+    exists: false # Deleted from first store
+  - path: .gydnc/config.yml # First store config
     exists: true
-    match_type: EXACT
-    content: |
-      ---
-      title: Delete Me
-      ---
-      This will be deleted.
+  - path: .gydnc/tag_ontology.md # First store ontology
+    exists: true

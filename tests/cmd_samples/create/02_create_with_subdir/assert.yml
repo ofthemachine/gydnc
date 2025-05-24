@@ -2,27 +2,31 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      Created guidance category/my-sub-guidance on default_local
-      --- Content of category/.gydnc/category/my-sub-guidance.g6e: ---
+      --- Content of .gydnc/category/my-sub-guidance.g6e: ---
       ---
-      title: my-sub-guidance
+      title: ""
       ---
-      # my-sub-guidance
+      #
 
-      Guidance content for 'my-sub-guidance' goes here.
-stderr: []
+      Guidance content for '' goes here.
+stderr:
+  - match_type: ORDERED_LINES
+    content: |
+      # REGEX: level=INFO msg="Target base path for initialization set" path=.*
+      # REGEX: level=INFO msg="gydnc initialized successfully" path=.*
+      level=INFO msg="Successfully created guidance." alias=category/my-sub-guidance backend=default_local
 filesystem:
-  - path: category/.gydnc/category/my-sub-guidance.g6e
+  - path: .gydnc/category/my-sub-guidance.g6e
     exists: true
     match_type: EXACT
     content: |
       ---
-      title: my-sub-guidance
+      title: ""
       ---
-      # my-sub-guidance
+      #
 
-      Guidance content for 'my-sub-guidance' goes here.
-  - path: category/.gydnc/config.yml
+      Guidance content for '' goes here.
+  - path: .gydnc/config.yml # gydnc create will also init if needed
     exists: true
-  - path: category/.gydnc/tag_ontology.md
+  - path: .gydnc/tag_ontology.md
     exists: true

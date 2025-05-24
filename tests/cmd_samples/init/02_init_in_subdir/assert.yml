@@ -2,15 +2,26 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      # REGEX: ^Created guidance store: /.*subdir/.gydnc$
-      # REGEX: ^Created tag_ontology.md: /.*subdir/.gydnc/tag_ontology.md$
-      # REGEX: ^Created configuration file: /.*subdir/.gydnc/config.yml$
-      # REGEX: ^gydnc initialized successfully in /.*subdir$
-      # REGEX: ^\s*export GYDNC_CONFIG="/[^"]+"\s*$
-  - match_type: UNORDERED_LINES
+
+      To activate this configuration for your current session, you can run:
+      # REGEX: .*export GYDNC_CONFIG.*subdir.*
+      Consider adding this line to your shell configuration file (e.g., ~/.zshrc or ~/.bashrc) for persistent use.
+      --- Verifying with list command ---
+      []
+      --- Directory structure created in subdir: ---
+      subdir:
+      --- Content of subdir/.gydnc/config.yml: ---
+      default_backend: default_local
+      storage_backends:
+          default_local:
+              type: localfs
+              localfs:
+                  # REGEX: path: .*subdir/.gydnc$
+stderr:
+  - match_type: ORDERED_LINES
     content: |
-      No guidance entities found across all configured backends.
-stderr: []
+      # REGEX: level=INFO msg="Target base path for initialization set" path=.*/subdir$
+      # REGEX: level=INFO msg="gydnc initialized successfully" path=.*/subdir$
 filesystem:
   - path: "subdir/.gydnc/config.yml"
     exists: true

@@ -1,7 +1,23 @@
+exit_code: 0
 stdout:
-  - match_type: ORDERED_LINES
+  - match_type: JSON
     content: |
       {
-        "title": "my-entity",
-        "body": "This is the body.\nWith a newline.\n"
+        "title": "Flag Body Test",
+        "body": "Body from flag\n"
       }
+stderr:
+  - match_type: ORDERED_LINES
+    content: |
+      # REGEX: level=INFO msg="Target base path for initialization set" path=.*
+      # REGEX: level=INFO msg="gydnc initialized successfully" path=.*
+      level=INFO msg="Successfully created guidance." alias=flag_body_test backend=default_local
+filesystem:
+  - path: ".gydnc/flag_body_test.g6e"
+    exists: true
+    match_type: EXACT
+    content: |
+      ---
+      title: Flag Body Test
+      ---
+      Body from flag

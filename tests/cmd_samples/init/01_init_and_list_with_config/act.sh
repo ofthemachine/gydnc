@@ -1,10 +1,15 @@
 #!/bin/bash
 set -e # Exit on first error
 
-# Initialize gydnc in the current directory (which will be the temp test directory)
-# This will now create .gydnc/config.yml and .gydnc/tag_ontology.md
-./gydnc init .
+# Perform init
+INIT_OUTPUT=$(./gydnc init)
+echo "$INIT_OUTPUT" # Echo the init output to be captured by stdout assertion
 
-# Run 'gydnc list' using the generated config file
-# The config config.yml should now be in .gydnc/ after 'init .'
-./gydnc --config .gydnc/config.yml list
+# Extract config path and list
+GYDNC_CONFIG_PATH=$(echo "$INIT_OUTPUT" | grep "export GYDNC_CONFIG" | head -n1 | cut -d'"' -f2)
+if [ -n "$GYDNC_CONFIG_PATH" ]; then
+  ./gydnc --config "$GYDNC_CONFIG_PATH" list > /dev/null # Run list, but discard its stdout for this test's stdout assertion
+else
+  echo "Failed to extract GYDNC_CONFIG_PATH" >&2
+  exit 1
+fi

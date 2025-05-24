@@ -1,23 +1,33 @@
-exit_code: 1
+exit_code: 0
 stdout:
+  - match_type: JSON
+    content: |
+      {
+        "title": "Updated Title for 01",
+        "description": "Original Description",
+        "tags": [
+          "common",
+          "tag1"
+        ],
+        "body": "# Original Title 01\n\nGuidance content for 'Original Title 01' goes here.\n"
+      }
+stderr:
   - match_type: ORDERED_LINES
     content: |
-      Created guidance update_target_01 on primary
-stderr:
-  - match_type: SUBSTRING
-    content: "failed to discover entity 'update_target_01': entity 'update_target_01' not found in any backend"
+      # REGEX: level=INFO msg="Successfully created guidance\." (.*alias=update_target_01.*backend=primary.*|.*backend=primary.*alias=update_target_01.*)$
+      # REGEX: level=INFO msg="Successfully updated entity\." (.*alias=update_target_01.*backend=primary.*|.*backend=primary.*alias=update_target_01.*)$
 # Filesystem check: the file should still exist as created, since update failed before modifying it.
 filesystem:
-  - path: .gydnc/update_target_01.g6e
+  - path: ".gydnc/update_target_01.g6e"
     exists: true
     match_type: EXACT
     content: |
       ---
-      title: Original Title 01
+      title: Updated Title for 01
       description: Original Description
       tags:
-          - tag1
           - common
+          - tag1
       ---
       # Original Title 01
 

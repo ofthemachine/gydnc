@@ -1,15 +1,20 @@
 #!/bin/bash
 set -e # Exit on first error
 
-SUBDIR_NAME="category"
+INIT_OUTPUT=$(./gydnc init)
+# We don't echo INIT_OUTPUT here, as stdout assertion is for the file content
 
-# Initialize gydnc in the subdirectory, suppressing output
-./gydnc init "${SUBDIR_NAME}" > /dev/null 2>&1
+GYDNC_CONFIG_PATH=$(echo "$INIT_OUTPUT" | grep "export GYDNC_CONFIG" | head -n1 | cut -d'"' -f2)
 
-# Create a new guidance file using the --config flag
-# This will now be created at ${SUBDIR_NAME}/.gydnc/my-sub-guidance.g6e
-./gydnc create --config "${SUBDIR_NAME}/.gydnc/config.yml" "${SUBDIR_NAME}/my-sub-guidance"
+if [ -z "$GYDNC_CONFIG_PATH" ]; then
+  echo "Failed to extract GYDNC_CONFIG_PATH from init output:" >&2
+  echo "$INIT_OUTPUT" >&2
+  exit 1
+fi
 
-# Optional: Display the created file for debugging (not asserted by default)
-echo "--- Content of ${SUBDIR_NAME}/.gydnc/${SUBDIR_NAME}/my-sub-guidance.g6e: ---"
-cat "${SUBDIR_NAME}/.gydnc/${SUBDIR_NAME}/my-sub-guidance.g6e"
+# Create the entity with a subdirectory in its alias, using the discovered config
+./gydnc --config "$GYDNC_CONFIG_PATH" create category/my-sub-guidance --title ""
+
+# Verify the content of the created file by catting it
+echo "--- Content of .gydnc/category/my-sub-guidance.g6e: ---"
+cat ".gydnc/category/my-sub-guidance.g6e"

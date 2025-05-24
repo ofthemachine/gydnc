@@ -6,9 +6,9 @@ stdout:
         "title": "Test Alpha Title",
         "description": "Description for Alpha.",
         "tags": [
+          "alpha",
           "go",
-          "test",
-          "alpha"
+          "test"
         ],
         "body": "# Test Alpha Title\n\nGuidance content for 'Test Alpha Title' goes here.\nThis is the body content\nfor Test Alpha.\nIt has multiple lines.\n"
       }

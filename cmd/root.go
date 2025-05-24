@@ -12,11 +12,12 @@ import (
 )
 
 var (
-	cfgFile     string
-	verbosity   int
-	quiet       bool
-	showVersion bool                // Add version flag
-	appContext  *service.AppContext // Exposed to be used by other files in cmd package
+	cfgFile      string
+	verbosity    int
+	quiet        bool
+	showVersion  bool                // Add version flag
+	outputFormat string              // Added for --output global flag
+	appContext   *service.AppContext // Exposed to be used by other files in cmd package
 )
 
 var rootCmd = &cobra.Command{
@@ -71,6 +72,7 @@ func init() {
 	rootCmd.PersistentFlags().CountVarP(&verbosity, "verbose", "v", "Increase logging verbosity (default: WARN, -v: INFO, -vv: DEBUG)")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "Suppress non-error log messages (equivalent to log level ERROR)")
 	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "V", false, "Show version and exit")
+	rootCmd.PersistentFlags().StringVar(&outputFormat, "output", "", "Output format (json, yaml)")
 
 	rootCmd.AddCommand(llmCmd) // llmCmd is defined in llm.go
 }

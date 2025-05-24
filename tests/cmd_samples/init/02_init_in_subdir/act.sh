@@ -10,9 +10,6 @@ mkdir -p "$SUBDIR_NAME"
 # This will create $SUBDIR_NAME/.gydnc/config.yml and $SUBDIR_NAME/.gydnc/tag_ontology.md
 ./gydnc init "$SUBDIR_NAME"
 
-# List the contents of the subdirectory to confirm creation
-ls -lR "$SUBDIR_NAME"
-
 echo "--- Verifying with list command --- "
 # Run 'gydnc list' using the generated config file in the subdirectory
 ./gydnc --config "$SUBDIR_NAME/.gydnc/config.yml" list

@@ -63,19 +63,19 @@ If a path is provided, initialization occurs there. Otherwise, it uses the curre
 			return err
 		}
 
-		fmt.Printf("Created guidance store: %s\n", gydncDirPath)
+		slog.Debug("Created guidance store", "path", gydncDirPath)
 
 		// Create tag_ontology.md directly in the init command
 		tagOntologyPath := filepath.Join(gydncDirPath, defaultTagOntologyFileName)
 		if err := os.WriteFile(tagOntologyPath, tagOntologyContent, 0644); err != nil {
 			return fmt.Errorf("failed to create tag_ontology.md at '%s': %w", tagOntologyPath, err)
 		}
-		fmt.Printf("Created tag_ontology.md: %s\n", tagOntologyPath)
+		slog.Debug("Created tag_ontology.md", "path", tagOntologyPath)
 
 		configFilePath := filepath.Join(gydncDirPath, "config.yml")
-		fmt.Printf("Created configuration file: %s\n", configFilePath)
+		slog.Debug("Created configuration file", "path", configFilePath)
 
-		fmt.Printf("gydnc initialized successfully in %s\n", targetBasePath)
+		slog.Info("gydnc initialized successfully", "path", targetBasePath)
 		fmt.Println("\nTo activate this configuration for your current session, you can run:")
 		fmt.Printf("  export GYDNC_CONFIG=\"%s\"\n", configFilePath)
 		fmt.Println("Consider adding this line to your shell configuration file (e.g., ~/.zshrc or ~/.bashrc) for persistent use.")

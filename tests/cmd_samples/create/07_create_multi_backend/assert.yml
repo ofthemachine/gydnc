@@ -1,28 +1,37 @@
-exit_code: 1 # list command fails due to unknown --backend flag
+exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      Created guidance test-entity on backend1
-
-      Created guidance test-entity on backend2
       === Listing backend1 contents ===
+      [
+        {
+          "alias": "test-entity",
+          "title": "Test Entity BE1",
+          "description": "",
+          "tags": null
+        }
+      ]
+      === Listing backend2 contents ===
+      [
+        {
+          "alias": "test-entity",
+          "title": "Test Entity BE2",
+          "description": "",
+          "tags": null
+        }
+      ]
+      === Listing merged contents (no backend flag) ===
+      [
+        {
+          "alias": "test-entity",
+          "title": "Test Entity BE1",
+          "description": "",
+          "tags": null
+        }
+      ]
 stderr:
-  - match_type: SUBSTRING
-    content: "unknown flag: --backend"
-filesystem:
-  - path: .gydnc/.gydnc/backend1/test-entity.g6e
-    exists: true # Files are created before list fails
-    match_type: EXACT
+  - match_type: ORDERED_LINES # Order of log fields can vary, so SUBSTRING is safer
     content: |
-      ---
-      title: Test Entity
-      ---
-      This is test content that should appear in backend1.
-  - path: .gydnc/.gydnc/backend2/test-entity.g6e
-    exists: true # Files are created before list fails
-    match_type: EXACT
-    content: |
-      ---
-      title: Test Entity
-      ---
-      This is test content that should appear in backend2.
+      level=INFO msg="Successfully created guidance." alias=test-entity backend=backend1
+      level=INFO msg="Successfully created guidance." alias=test-entity backend=backend2
+      level=WARN msg="Alias found in multiple backends. Prioritizing version." alias=test-entity chosen_from_backend=backend1 all_found_in_backends="[backend1 backend2]" ignored_backends=[backend2]

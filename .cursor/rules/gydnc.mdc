@@ -17,7 +17,7 @@ ALWAYS follow this sequence to ensure you have comprehensive guidance:
 1. **BEGIN WITH OVERVIEW:** Start EVERY session by getting a complete overview of available guidance:
     ```bash
     # CRITICAL: Get overview of ALL available guidance entities
-    gydnc list --json
+    gydnc list
     ```
     This step is NON-OPTIONAL. You must begin by understanding what guidance is available.
 
@@ -26,14 +26,13 @@ ALWAYS follow this sequence to ensure you have comprehensive guidance:
     # Get complete guidance content for multiple entities in one command
     gydnc get <entity1> <entity2> <entity3>
     ```
-    Do NOT use the --json flag with 'get' commands, as the default output provides the complete guidance text.
 
 3. **PREFER BATCH RETRIEVAL:** Always fetch multiple relevant guidance entities in a single command rather than separate commands.
 
 4. **RE-FETCH AS REQUESTS EVOLVE:** When the user's request changes direction or introduces new requirements, IMMEDIATELY fetch additional relevant guidance:
     ```bash
     # Example: When user asks about a new topic (e.g., "write a blog post")
-    gydnc list --json
+    gydnc list
     gydnc get <relevant-blog-writing-guidance>
     ```
     It is CRITICAL to adapt and fetch new guidance as the conversation progresses.
@@ -60,7 +59,7 @@ When creating new guidance entities:
 
 2. **AVOID PROBLEMATIC PATTERNS:**
    - ❌ NEVER use `--body` flag for multi-line content
-   - ❌ NEVER skip the mandatory `gydnc list --json` first step
+   - ❌ NEVER skip the mandatory `gydnc list` first step
    - ❌ NEVER run `gydnc init` unless explicitly needed (assume configuration exists)
 
 3. **COMPLETE METADATA:** Always include comprehensive metadata when creating:
@@ -132,7 +131,7 @@ As the user's needs evolve during a conversation:
 **Essential Patterns:**
 1. **Overview Retrieval (MANDATORY):**
     ```bash
-    gydnc list --json
+    gydnc list
     ```
 
 2. **Detailed Guidance Retrieval:**
@@ -178,7 +177,7 @@ As the user's needs evolve during a conversation:
 - Solution: Start fresh terminal or source profile
 
 ## Notes
-- **ALWAYS start with `gydnc list --json`** - This is mandatory for understanding available guidance
+- **ALWAYS start with `gydnc list`** - This is mandatory for understanding available guidance
 - The full guidance content is critical for understanding context and requirements
 - Never rely solely on the overview - always retrieve full guidance with `gydnc get`
 - Batch retrieval is preferred - get multiple entities in one command

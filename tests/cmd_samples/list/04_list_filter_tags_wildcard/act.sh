@@ -1,15 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 
-# Initialize the repository
-./gydnc init . > /dev/null 2>&1
+# Setup: Use a shared config and create some entities with tags
+TEST_DIR=$(pwd)
+CONFIG_CONTENT="default_backend: primary\nstorage_backends:\n  primary:\n    type: localfs\n    localfs:\n      path: $TEST_DIR/test_data\n"
+mkdir -p .gydnc test_data
+echo -e "$CONFIG_CONTENT" > .gydnc/config.yml
+export GYDNC_CONFIG="$TEST_DIR/.gydnc/config.yml"
 
-# Create entities with different tags
-GYDNC_CONFIG=.gydnc/config.yml ./gydnc create --title "Code Entity" --description "A code-related entity" --tags "scope:code,quality:safety" code-entity > /dev/null 2>&1
-GYDNC_CONFIG=.gydnc/config.yml ./gydnc create --title "Docs Entity" --description "A documentation entity" --tags "scope:docs,quality:clarity" docs-entity > /dev/null 2>&1
-GYDNC_CONFIG=.gydnc/config.yml ./gydnc create --title "Deprecated Entity" --description "A deprecated entity" --tags "scope:code,deprecated" deprecated-entity > /dev/null 2>&1
-GYDNC_CONFIG=.gydnc/config.yml ./gydnc create --title "Feature Entity" --description "A feature entity" --tags "feature:wizard,feature:awesome" feature-entity > /dev/null 2>&1
+./gydnc create entityA --title "Entity A" --tags "scope:code,feature:new" > /dev/null
+./gydnc create entityB --title "Entity B" --tags "scope:docs,feature:update" > /dev/null
+./gydnc create entityC --title "Entity C" --tags "scope:code,status:deprecated" > /dev/null
 
-# Test complex filtering with wildcards and negation
-# This returns all entities with scope: tags except those with the deprecated tag
-GYDNC_CONFIG=.gydnc/config.yml ./gydnc list --json --filter-tags "scope:* -deprecated"
+# List with wildcard tag filter
+./gydnc list --filter-tags "scope:*"
+
+echo "---Filtering for scope:code AND NOT status:deprecated---"
+./gydnc list --filter-tags "scope:code -status:deprecated"

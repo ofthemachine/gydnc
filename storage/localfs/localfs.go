@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"gydnc/core/content"
 	"gydnc/model"
 	// "gydnc/storage" // REMOVED to break import cycle. Errors like ErrEntityNotFound will be handled by callers or via stdlib errors.
 )
@@ -134,11 +135,10 @@ func (s *Store) isIgnored(name string) bool {
 	return false // Placeholder: No ignore patterns currently configured this way
 }
 
-// Read retrieves the content of a guidance entity.
+// Read retrieves the content of a guidance entity and its parsed G6E frontmatter as metadata.
 func (s *Store) Read(alias string) ([]byte, map[string]interface{}, error) {
 	fileName := alias + g6eExt
 	if s.isIgnored(fileName) {
-		// Use fs.ErrNotExist for a generic "not found" that callers can interpret.
 		return nil, nil, fmt.Errorf("%w: entity is ignored: %s", fs.ErrNotExist, alias)
 	}
 	filePath := filepath.Join(s.basePath, fileName)
@@ -149,9 +149,31 @@ func (s *Store) Read(alias string) ([]byte, map[string]interface{}, error) {
 		}
 		return nil, nil, err
 	}
-	// For localfs, metadata might be minimal or derived from file system properties if needed.
-	// Returning nil for now, as .g6e files embed their own metadata.
-	return data, nil, nil
+
+	parsedG6E, err := content.ParseG6E(data)
+	if err != nil {
+		// Log parsing error but still return raw content, metadata will be minimal.
+		slog.Warn("Failed to parse G6E frontmatter during Read", "alias", alias, "path", filePath, "error", err)
+		// Return basic metadata even if parsing fails, or an empty map.
+		// For consistency, it's better to ensure metadata map is not nil.
+		return data, make(map[string]interface{}), fmt.Errorf("failed to parse G6E content for %s: %w", alias, err)
+	}
+
+	metadata := map[string]interface{}{
+		"title":       parsedG6E.Title,
+		"description": parsedG6E.Description,
+		"tags":        parsedG6E.Tags, // These are already []string from ParseG6E
+		// Include other known frontmatter fields if necessary, or add them to CustomMetadata
+	}
+	// Add any other raw frontmatter fields to metadata if ParseG6E exposes them
+	// For example, if parsedG6E.RawFrontmatter is a map[string]interface{}:
+	// for k, v := range parsedG6E.RawFrontmatter {
+	//  if _, exists := metadata[k]; !exists { // Avoid overwriting structured fields
+	//   metadata[k] = v
+	//  }
+	// }
+
+	return data, metadata, nil
 }
 
 // Write creates or updates a guidance entity.
@@ -248,23 +270,56 @@ func (s *Store) Delete(alias string) error {
 	return nil
 }
 
-// Stat is not deeply implemented, returns basic info for localfs.
+// Stat retrieves metadata about a guidance entity, including parsed G6E frontmatter.
 func (s *Store) Stat(alias string) (map[string]interface{}, error) {
 	fileName := alias + g6eExt
 	if s.isIgnored(fileName) {
 		return nil, fmt.Errorf("%w: entity is ignored: %s", fs.ErrNotExist, alias)
 	}
 	filePath := filepath.Join(s.basePath, fileName)
-	fileInfo, err := os.Stat(filePath)
+
+	// Read file content to parse frontmatter
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fs.ErrNotExist // Standard library error
+			return nil, fs.ErrNotExist
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to read file for Stat %s: %w", alias, err)
 	}
-	return map[string]interface{}{
-		"size":     fileInfo.Size(),
-		"mod_time": fileInfo.ModTime(),
-		"name":     fileInfo.Name(),
-	}, nil
+
+	parsedG6E, err := content.ParseG6E(data)
+	if err != nil {
+		// Log parsing error but proceed with basic file info if G6E parsing fails.
+		slog.Warn("Failed to parse G6E frontmatter during Stat", "alias", alias, "path", filePath, "error", err)
+		// Fallback to basic file info if parsing fails
+		fileInfo, statErr := os.Stat(filePath)
+		if statErr != nil { // This shouldn't happen if ReadFile succeeded, but good to check.
+			return nil, fmt.Errorf("failed to stat file after G6E parse error for %s: %w", alias, statErr)
+		}
+		return map[string]interface{}{
+			"name":     fileInfo.Name(),
+			"size":     fileInfo.Size(),
+			"mod_time": fileInfo.ModTime(),
+			// Indicate parsing failure or incomplete metadata
+			"g6e_parse_error": err.Error(),
+		}, nil // Return basic info with error, or just the error: fmt.Errorf("failed to parse G6E content for Stat %s: %w", alias, err)
+	}
+
+	// Successfully parsed, return rich metadata
+	metadata := map[string]interface{}{
+		"title":       parsedG6E.Title,
+		"description": parsedG6E.Description,
+		"tags":        parsedG6E.Tags,          // These are already []string from ParseG6E
+		"name":        filepath.Base(filePath), // Keep basic file info too
+		// "size": // Size might be misleading if we only care about frontmatter for Stat.
+		// "mod_time": // ModTime might still be relevant.
+	}
+	// If ParseG6E provided other frontmatter fields in a map, merge them here.
+	// e.g., if parsedG6E.OtherFrontmatter exists:
+	// for k, v := range parsedG6E.OtherFrontmatter {
+	//  if _, exists := metadata[k]; !exists {
+	//   metadata[k] = v
+	//  }
+	// }
+	return metadata, nil
 }

@@ -83,9 +83,9 @@ Requires confirmation unless --force is specified.`,
 		}
 
 		if len(toDelete) == 0 {
-			fmt.Println("No matching entities found to delete.")
+			appContext.Logger.Info("No matching entities found to delete.")
 			if len(notFound) > 0 {
-				fmt.Printf("Not found: %s\n", strings.Join(notFound, ", "))
+				appContext.Logger.Info("Some aliases provided were not found.", "aliases", strings.Join(notFound, ", "))
 			}
 			return nil
 		}
@@ -109,7 +109,7 @@ Requires confirmation unless --force is specified.`,
 			resp, _ := reader.ReadString('\n')
 			resp = strings.TrimSpace(strings.ToLower(resp))
 			if resp != "y" && resp != "yes" {
-				fmt.Println("Aborted.")
+				appContext.Logger.Info("Deletion aborted by user.")
 				return nil
 			}
 		}
@@ -137,27 +137,23 @@ Requires confirmation unless --force is specified.`,
 		}
 
 		if len(deleted) > 0 {
-			fmt.Println("Deleted:")
-			for _, d := range deleted {
-				fmt.Printf("- %s\n", d)
-			}
+			deletedItems := make([]string, len(deleted))
+			copy(deletedItems, deleted)
+			appContext.Logger.Info("Entities deleted.", "items", deletedItems)
 		} else {
-			// Always print Deleted: even if nothing was deleted, to match test expectations
-			fmt.Println("Deleted:")
+			appContext.Logger.Info("No entities were deleted in this operation (either none matched or all failed).", "items", []string{})
 		}
 		if len(failed) > 0 {
-			fmt.Println("Failed to delete:")
-			for _, f := range failed {
-				fmt.Printf("- %s\n", f)
-			}
+			failedItems := make([]string, len(failed))
+			copy(failedItems, failed)
+			appContext.Logger.Error("Failed to delete some entities.", "items", failedItems)
 		}
-		if len(notFound) > 0 {
-			fmt.Printf("Not found: %s\n", strings.Join(notFound, ", "))
+		if len(notFound) > 0 && len(toDelete) > 0 {
+			appContext.Logger.Info("Some aliases provided were not found (and were not processed for deletion).", "aliases", strings.Join(notFound, ", "))
 		}
 
 		// Print available guidance entities summary (same as list command)
-		fmt.Println("Available guidance entities:")
-		// Print backends in sorted order for deterministic output
+		appContext.Logger.Debug("Starting summary of available entities post-deletion.")
 		backendNames := make([]string, 0, len(cfg.StorageBackends))
 		for backendName := range cfg.StorageBackends {
 			backendNames = append(backendNames, backendName)
@@ -168,45 +164,39 @@ Requires confirmation unless --force is specified.`,
 			backendConfigEntry := cfg.StorageBackends[backendName]
 			backend, err := InitializeBackendFromConfig(backendName, backendConfigEntry)
 			if err != nil {
-				fmt.Printf("  Error initializing backend %s: %v\n", backendName, err)
+				appContext.Logger.Warn("Error initializing backend for post-delete summary list.", "backend", backendName, "error", err)
 				continue
 			}
 			entities, err := backend.List("")
 			if err != nil {
-				fmt.Printf("  Error listing entities from backend %s: %v\n", backendName, err)
+				appContext.Logger.Warn("Error listing from backend for post-delete summary list.", "backend", backendName, "error", err)
 				continue
 			}
 			if len(entities) == 0 {
-				fmt.Printf("  No entities found in backend: %s\n", backendName)
+				appContext.Logger.Debug("No entities found in backend for post-delete summary.", "backend", backendName)
 				continue
 			}
+			foundEntitiesInBackend := 0
 			for _, entityID := range entities {
-				contentBytes, meta, readErr := backend.Read(entityID)
+				contentBytes, _, readErr := backend.Read(entityID)
 				if readErr != nil {
+					appContext.Logger.Debug("Error reading entity for summary list, skipping.", "id", entityID, "backend", backendName, "error", readErr)
 					continue
 				}
 				parsed, parseErr := content.ParseG6E(contentBytes)
 				if parseErr != nil {
+					appContext.Logger.Debug("Error parsing entity for summary list, skipping.", "id", entityID, "backend", backendName, "error", parseErr)
 					continue
 				}
-				entity := model.Entity{
-					Alias:          entityID,
-					SourceBackend:  backendName,
-					Title:          parsed.Title,
-					Description:    parsed.Description,
-					Tags:           parsed.Tags,
-					CustomMetadata: meta,
-					Body:           parsed.Body,
-				}
-				cid, _ := parsed.GetContentID()
-				entity.CID = cid
-				fmt.Printf("- %s (backend: %s) | title: %s | tags: %v\n", entity.Alias, entity.SourceBackend, entity.Title, entity.Tags)
-				foundEntities++
+				appContext.Logger.Debug("Found entity post-delete.", "alias", entityID, "backend", backendName, "title", parsed.Title)
+				foundEntitiesInBackend++
 			}
+			foundEntities += foundEntitiesInBackend
 		}
 		if foundEntities == 0 {
-			fmt.Println("No guidance entities found across all configured backends.")
+			appContext.Logger.Info("No guidance entities found across all configured backends post-delete.")
 		}
+
 		return nil
 	},
 }

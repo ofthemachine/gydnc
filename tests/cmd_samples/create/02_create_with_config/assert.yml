@@ -1,14 +1,15 @@
 exit_code: 0
 stdout:
-  - match_type: ORDERED_LINES
+  - match_type: JSON # Output is a JSON object
     content: |
-      Created guidance my-cfg-guidance on default_local
-
       {
-        "title": "my-cfg-guidance",
-        "body": "# my-cfg-guidance\n\nGuidance content for 'my-cfg-guidance' goes here.\n"
+        "title": "",
+        "body": "#\n\nGuidance content for '' goes here.\n"
       }
-stderr: []
+stderr:
+  - match_type: EXACT
+    content: |
+      level=INFO msg="Successfully created guidance." alias=my-cfg-guidance backend=default_local
 filesystem:
   - path: "subdir_cfg_create/.gydnc/config.yml"
     exists: true

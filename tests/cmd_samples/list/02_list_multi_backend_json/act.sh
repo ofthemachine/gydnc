@@ -1,21 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 
-cat > config.yml <<EOF
-default_backend: be1
-storage_backends:
-  be1:
-    type: localfs
-    localfs:
-      path: .store_be1
-  be2:
-    type: localfs
-    localfs:
-      path: .store_be2
-EOF
+# Setup as in create/07_create_multi_backend
+TEST_DIR=$(pwd)
+CONFIG_CONTENT="default_backend: backend1\nstorage_backends:\n  backend1:\n    type: localfs\n    localfs:\n      path: $TEST_DIR/backend1_data\n  backend2:\n    type: localfs\n    localfs:\n      path: $TEST_DIR/backend2_data\n"
+mkdir -p .gydnc backend1_data backend2_data
+echo -e "$CONFIG_CONTENT" > .gydnc/config.yml
+export GYDNC_CONFIG="$TEST_DIR/.gydnc/config.yml"
+# export GYDNC_LOG_LEVEL="debug"
 
-./gydnc init --config config.yml > /dev/null 2>&1
-GYDNC_CONFIG=config.yml ./gydnc create --title "Entity in BE1" --description "From backend 1" --tags "be1,shared" shared-entity --backend be1 --config config.yml > /dev/null 2>&1
-GYDNC_CONFIG=config.yml ./gydnc create --title "Entity in BE2" --description "From backend 2" --tags "be2,shared" shared-entity --backend be2 --config config.yml > /dev/null 2>&1
-GYDNC_CONFIG=config.yml ./gydnc create --title "Unique in BE2" --description "Unique entity" --tags "be2,unique" unique-entity --backend be2 --config config.yml > /dev/null 2>&1
-GYDNC_CONFIG=config.yml ./gydnc list --json --config config.yml
+# Create entities
+./gydnc create entity1 --title "Entity 1 in BE1" --backend backend1 > /dev/null
+./gydnc create entity2 --title "Entity 2 in BE1" --backend backend1 > /dev/null
+./gydnc create entity1 --title "Entity 1 in BE2" --backend backend2 > /dev/null # Duplicate alias
+./gydnc create entity3 --title "Entity 3 in BE2" --backend backend2 > /dev/null
+
+# List all (merged, default is JSON)
+./gydnc list

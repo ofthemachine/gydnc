@@ -46,6 +46,23 @@ test-integration: ## Run integration tests
 		go test ./tests -v -tags=integration; \
 	fi
 
+.PHONY: test-session
+test-session: build ## Creates a temporary directory with a specific test sample and the built gydnc binary for manual debugging.
+	@if [ -z "$(DIR)" ]; then \
+		echo "Error: DIR variable must be set. Example: make test-session DIR=cmd_samples/create/01_create_simple"; \
+		exit 1; \
+	fi
+	@SESSION_DIR=$$(mktemp -d); \
+	echo "Setting up test session in: $${SESSION_DIR}"; \
+	cp -r tests/$(DIR)/* "$${SESSION_DIR}/"; \
+	cp $(BINARY_NAME) "$${SESSION_DIR}/"; \
+	echo "Test session environment created."; \
+	echo "To start debugging, run:"; \
+	echo "  cd $${SESSION_DIR}"; \
+	echo "  # Start your preferred shell, e.g., zsh or bash"; \
+	echo "  zsh"; \
+	echo "  # You can now run ./$(BINARY_NAME) commands against the test files."
+
 fmt: ## Format code
 	@echo "Formatting code..."
 	go fmt ./...

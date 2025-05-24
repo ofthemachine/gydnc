@@ -92,9 +92,6 @@ gydnc create --title "Safety First" \
 # List all guidance entities
 gydnc list
 
-# List with JSON output for machine processing
-gydnc list --json
-
 # Filter by tags
 gydnc list --filter "tags:quality:safety"
 ```
@@ -128,7 +125,7 @@ gydnc is designed to work seamlessly with AI assistants. When working with an AI
 
 1. Start by getting an overview of available guidance:
    ```bash
-   gydnc list --json
+   gydnc list
    ```
 
 2. Retrieve relevant guidance based on your current task:

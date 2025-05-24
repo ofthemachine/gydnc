@@ -1,6 +1,25 @@
-exit_code: 1 # update command fails, script echoes to stdout and exits
+exit_code: 0
 stdout:
-  - match_type: ORDERED_LINES
+  - match_type: JSON
     content: |
-      update alpha failed
+      [
+        {
+          "title": "Test Alpha Title",
+          "description": "Alpha Desc",
+          "tags": [
+            "alpha",
+            "common"
+          ],
+          "body": "Body for Alpha.\n"
+        },
+        {
+          "title": "Test Beta Title",
+          "description": "Beta Desc",
+          "tags": [
+            "beta",
+            "common"
+          ],
+          "body": "Body for Beta.\n"
+        }
+      ]
 stderr: []

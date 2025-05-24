@@ -1,10 +1,12 @@
 exit_code: 0
 stdout:
-  - match_type: ORDERED_LINES
+  - match_type: EXACT
     content: |
       Notice: No DefaultBackend specified in configuration. Some commands may not function.
-      Created guidance multi_backend/single_be_test_entity on sole_backend
-stderr: []
+stderr:
+  - match_type: EXACT
+    content: |
+      level=INFO msg="Successfully created guidance." alias=multi_backend/single_be_test_entity backend=sole_backend
 filesystem:
   - path: .the_only_store/multi_backend/single_be_test_entity.g6e
     exists: true

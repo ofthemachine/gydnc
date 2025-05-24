@@ -1,9 +1,9 @@
 exit_code: 0
-stdout:
-  - match_type: ORDERED_LINES
+stdout: [] # stdout is empty
+stderr:
+  - match_type: EXACT
     content: |
-      Created guidance multi_backend/be_flag_test_entity on secondary
-stderr: []
+      level=INFO msg="Successfully created guidance." alias=multi_backend/be_flag_test_entity backend=secondary
 filesystem:
   - path: .store_secondary/multi_backend/be_flag_test_entity.g6e
     exists: true

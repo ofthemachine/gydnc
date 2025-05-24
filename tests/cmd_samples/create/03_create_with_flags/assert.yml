@@ -6,8 +6,8 @@ stdout:
         "title": "Flagged Guidance",
         "description": "Created with flags",
         "tags": [
-          "flag",
-          "cli"
+          "cli",
+          "flag"
         ],
         "body": "# Flagged Guidance\n\nGuidance content for 'Flagged Guidance' goes here.\n"
       }

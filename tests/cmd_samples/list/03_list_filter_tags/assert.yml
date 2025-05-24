@@ -1,25 +1,53 @@
 exit_code: 0
 stdout:
-  - match_type: JSON
+  - match_type: ORDERED_LINES # Check the full output including the separator
     content: |
       [
         {
-          "alias": "code-entity",
-          "description": "A code-related entity",
+          "alias": "entityA",
+          "title": "Entity A",
+          "description": "",
           "tags": [
-            "quality:safety",
-            "scope:code"
-          ],
-          "title": "Code Entity"
+            "feat",
+            "urgent"
+          ]
         },
         {
-          "alias": "deprecated-entity",
-          "description": "A deprecated entity",
+          "alias": "entityB",
+          "title": "Entity B",
+          "description": "",
           "tags": [
-            "deprecated",
-            "scope:code"
-          ],
-          "title": "Deprecated Entity"
+            "bug",
+            "urgent"
+          ]
+        }
+      ]
+      ---Filtering for feat AND NOT bug---
+      [
+        {
+          "alias": "entityA",
+          "title": "Entity A",
+          "description": "",
+          "tags": [
+            "feat",
+            "urgent"
+          ]
+        },
+        {
+          "alias": "entityC",
+          "title": "Entity C",
+          "description": "",
+          "tags": [
+            "feat",
+            "test"
+          ]
         }
       ]
 stderr: []
+filesystem:
+  - path: test_data/entityA.g6e
+    exists: true
+  - path: test_data/entityB.g6e
+    exists: true
+  - path: test_data/entityC.g6e
+    exists: true

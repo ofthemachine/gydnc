@@ -1,13 +1,14 @@
 exit_code: 1
 stdout:
-  - match_type: ORDERED_LINES
+  - match_type: EXACT
     content: |
-      Created guidance existing-guidance on default_local
       Second create attempt exit code: 1
 stderr:
   - match_type: ORDERED_LINES
     content: |
-      # REGEX: ^guidance file '.*/\.gydnc/existing-guidance.g6e' already exists$
+      level=INFO msg="Successfully created guidance." alias=existing-guidance backend=default_local
+      # REGEX: level=ERROR msg="Failed to save entity using EntityService" alias=existing-guidance error=".*entity already exists"
+      # REGEX: failed to create guidance 'existing-guidance': .*entity already exists
 filesystem:
   - path: ".gydnc/existing-guidance.g6e"
     exists: true

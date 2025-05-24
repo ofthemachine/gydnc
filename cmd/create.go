@@ -2,15 +2,16 @@ package cmd
 
 import (
 	"bufio"
+	"errors" // Added for errors.Is
 	"fmt"
 	"log/slog" // To be used for debug logging
 	"os"
-	"path/filepath"
+
 	"strings"
 
-	"gydnc/core/content" // For GuidanceContent and ToFileContent
+	// For GuidanceContent and ToFileContent
 	"gydnc/model"
-	"gydnc/service"
+	"gydnc/storage" // Added for storage.ErrAmbiguousBackend
 
 	"github.com/spf13/cobra"
 )
@@ -27,168 +28,37 @@ var (
 // createCmd represents the create command
 var createCmd = &cobra.Command{
 	Use:   "create <alias_or_path>",
-	Short: "Create a new guidance entity file (.g6e)",
-	Long: `Creates a new .g6e guidance file.
+	Short: "Create a new guidance entity",
+	Long: `Creates a new guidance entity using the EntityService.
 
-If <alias_or_path> is a simple name (e.g., "my-guidance"), the file
-is created in the default guidance store directory with the .g6e extension
-(e.g., <store_path>/my-guidance.g6e).
+The alias_or_path is used as the entity's alias.
+Metadata (title, description, tags) is provided via flags.
+Body content can be provided via stdin, --body, or --body-from-file.
 
-If <alias_or_path> includes slashes (e.g., "category/my-guidance"),
-it is treated as a path relative to the default guidance store directory.
-The .g6e extension will be added if not present.
-
-The command will fail if the target file already exists.
-All necessary parent directories will be created.
-
-Body content can be provided via one of three methods (mutually exclusive):
-- Piping to stdin (e.g., echo "Body content" | gydnc create ...)
-- Using the --body flag (e.g., gydnc create ... --body "Body content")
-- Using the --body-from-file flag (e.g., gydnc create ... --body-from-file path/to/body.txt)
-
-If no body is provided, a default placeholder body will be generated.`,
+The command will fail if the entity already exists in the target backend.
+All write operations are handled by the configured storage backend via the EntityService.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		aliasOrPath := args[0]
-		// slog.Debug("Starting 'create' command", "aliasOrPath", aliasOrPath, "title", createTitle, "description", createDescription, "tags", createTags, "backend", createBackend)
+		alias := args[0] // Changed from aliasOrPath to just alias, as path resolution is now backend's concern
+		slog.Debug("Starting 'create' command with EntityService",
+			"alias", alias,
+			"title", createTitle,
+			"description", createDescription,
+			"tags", createTags,
+			"backend", createBackend,
+			"bodyFromFile", createBodyFromFile,
+			"bodyFlagUsed", cmd.Flags().Changed("body"))
 
-		// Check if app context is initialized
-		if appContext == nil || appContext.Config == nil {
-			return fmt.Errorf("configuration not loaded; run 'gydnc init' or check config")
+		// Check if app context and entity service are initialized
+		if appContext == nil || appContext.Config == nil || appContext.EntityService == nil {
+			slog.Error("Application context, configuration, or entity service not initialized.")
+			return fmt.Errorf("application context, configuration, or entity service not initialized")
 		}
 
-		// Get config from app context and initialize config service
-		cfg := appContext.Config
-		configService := service.NewConfigService(appContext)
-
-		var targetBackendName string
-		var chosenBackendConfig *model.StorageConfig
-
-		if createBackend != "" {
-			targetBackendName = createBackend
-			backendConfig, ok := cfg.StorageBackends[targetBackendName]
-			if !ok {
-				return fmt.Errorf("specified backend '%s' not found in configuration", targetBackendName)
-			}
-			if backendConfig == nil {
-				return fmt.Errorf("configuration for specified backend '%s' is nil (should not happen if key exists)", targetBackendName)
-			}
-			chosenBackendConfig = backendConfig
-		} else if cfg.DefaultBackend != "" {
-			targetBackendName = cfg.DefaultBackend
-			backendConfig, ok := cfg.StorageBackends[targetBackendName]
-			if !ok {
-				return fmt.Errorf("default backend '%s' (from config) not found in storage_backends configuration", targetBackendName)
-			}
-			if backendConfig == nil {
-				return fmt.Errorf("configuration for default backend '%s' is nil (should not happen if key exists)", targetBackendName)
-			}
-			chosenBackendConfig = backendConfig
-		} else {
-			if len(cfg.StorageBackends) == 0 {
-				return fmt.Errorf("no storage backends configured")
-			}
-			if len(cfg.StorageBackends) == 1 {
-				// If only one backend, use it by default
-				for name, backendCfg := range cfg.StorageBackends {
-					targetBackendName = name
-					chosenBackendConfig = backendCfg
-					// slog.Debug("Only one backend configured, using it by default", "backendName", targetBackendName)
-					break
-				}
-			} else {
-				// Multiple backends, no default, no explicit choice
-				return fmt.Errorf("multiple backends configured and no default is set. Please specify a backend using --backend or set default_backend in config")
-			}
-		}
-
-		if chosenBackendConfig == nil { // Should be caught by earlier checks, but as a safeguard
-			return fmt.Errorf("failed to determine a target storage backend")
-		}
-
-		var storeBasePath string
-		switch chosenBackendConfig.Type {
-		case "localfs":
-			if chosenBackendConfig.LocalFS == nil {
-				return fmt.Errorf("backend '%s' is type 'localfs' but has no localfs settings configured", targetBackendName)
-			}
-			if chosenBackendConfig.LocalFS.Path == "" {
-				return fmt.Errorf("localfs backend '%s' is missing the 'path' setting", targetBackendName)
-			}
-
-			// Resolve storeBasePath relative to the config file's directory
-			rawPathFromConfig := chosenBackendConfig.LocalFS.Path
-			if !filepath.IsAbs(rawPathFromConfig) {
-				// Get the loaded config path using service
-				loadedConfigPath, err := configService.GetEffectiveConfigPath(cfgFile)
-				if err == nil && loadedConfigPath != "" {
-					configDir := filepath.Dir(loadedConfigPath)
-					storeBasePath = filepath.Join(configDir, rawPathFromConfig)
-				} else {
-					// If no config file path, treat relative path from config as relative to CWD
-					storeBasePath = rawPathFromConfig
-				}
-			} else {
-				storeBasePath = rawPathFromConfig
-			}
-			// Ensure storeBasePath is an absolute path for subsequent operations
-			var err error
-			storeBasePath, err = filepath.Abs(storeBasePath)
-			if err != nil {
-				return fmt.Errorf("failed to get absolute path for storeBasePath ('%s'): %w", storeBasePath, err)
-			}
-		default:
-			return fmt.Errorf("backend '%s' has an unsupported type '%s' for the create command", targetBackendName, chosenBackendConfig.Type)
-		}
-
-		// Determine target file path
-		targetFileName := aliasOrPath
-		if filepath.Ext(targetFileName) == "" {
-			targetFileName += ".g6e"
-		}
-		targetFilePath := filepath.Join(storeBasePath, targetFileName)
-
-		// Ensure the path is within the storeBasePath (basic safety)
-		absTargetFilePath, err := filepath.Abs(targetFilePath)
-		if err != nil {
-			return fmt.Errorf("could not get absolute path for target: %w", err)
-		}
-		absStoreBasePath, err := filepath.Abs(storeBasePath)
-		if err != nil {
-			return fmt.Errorf("could not get absolute path for store: %w", err)
-		}
-		// Check if the target path is safely within the store base path.
-		// filepath.Rel will return an error if they don't share a common prefix,
-		// or a path starting with ".." if target is outside base.
-		relPath, err := filepath.Rel(absStoreBasePath, absTargetFilePath)
-		if err != nil {
-			// This case implies they don't share a common base or one is not abs, which Abs should prevent.
-			// However, direct check for safety is good.
-			return fmt.Errorf("target path '%s' is not relatable to store path '%s': %w", targetFilePath, storeBasePath, err)
-		}
-		// If relPath starts with "..", it means absTargetFilePath is outside absStoreBasePath.
-		// Also, if relPath is exactly ".." (though Rel should produce a more specific path like "../target").
-		if strings.HasPrefix(relPath, "..") {
-			return fmt.Errorf("resolved target path '%s' attempts to navigate outside the configured store path '%s'", absTargetFilePath, absStoreBasePath)
-		}
-
-		// Safety Check: Fail if file already exists
-		if _, err := os.Stat(targetFilePath); err == nil {
-			return fmt.Errorf("guidance file '%s' already exists", targetFilePath)
-		} else if !os.IsNotExist(err) {
-			return fmt.Errorf("error checking for existing file '%s': %w", targetFilePath, err)
-		}
-
-		// Create parent directories if they don't exist
-		targetDir := filepath.Dir(targetFilePath)
-		if err := os.MkdirAll(targetDir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory '%s': %w", targetDir, err)
-		}
-
+		// Determine body content
 		var actualBodyContent string
 		var bodySourceUsed bool
 
-		// Check flags and stdin for body content
 		bodyFromFileFlagUsed := cmd.Flags().Changed("body-from-file")
 		bodyFlagUsed := cmd.Flags().Changed("body")
 
@@ -226,96 +96,61 @@ If no body is provided, a default placeholder body will be generated.`,
 			if err := scanner.Err(); err != nil {
 				return fmt.Errorf("error reading body from stdin: %w", err)
 			}
-
 			if len(lines) > 0 {
 				actualBodyContent = strings.Join(lines, "\n")
+				// Ensure trailing newline if content is not empty
+				if !strings.HasSuffix(actualBodyContent, "\n") {
+					actualBodyContent += "\n"
+				}
 			} else {
 				actualBodyContent = "" // Explicitly empty for empty stdin
 			}
-			bodySourceUsed = true // Considered used even if stdin was empty but piped
+			bodySourceUsed = true
 		} else if bodyFlagUsed {
 			actualBodyContent = createBody
+			// Ensure trailing newline if content is not empty and doesn't have one
 			if actualBodyContent != "" && !strings.HasSuffix(actualBodyContent, "\n") {
 				actualBodyContent += "\n"
 			}
 			bodySourceUsed = true
 		}
 
-		// Generate initial content
-		// newID := uuid.New().String() // Removed: ID is now content-addressable
-		title := createTitle
-		if title == "" {
-			// Derive title from filename, removing .g6e and replacing hyphens/underscores
-			base := filepath.Base(targetFileName)
-			ext := filepath.Ext(base)
-			title = base[0 : len(base)-len(ext)]
-			// TODO: Make title prettier (e.g., replace hyphens, underscores with spaces, capitalize)
-		}
-		description := createDescription // Default is empty if not provided
+		// Use default title if not provided - user wants blank if not specified
+		titleToUse := createTitle
 
 		// Use default body if none provided
 		if !bodySourceUsed || actualBodyContent == "" {
-			actualBodyContent = fmt.Sprintf("# %s\n\nGuidance content for '%s' goes here.\n", title, title)
+			if titleToUse == "" {
+				actualBodyContent = "#\n\nGuidance content for '' goes here.\n" // Corrected: '' for empty title placeholder
+			} else {
+				actualBodyContent = fmt.Sprintf("# %s\n\nGuidance content for '%s' goes here.\n", titleToUse, titleToUse)
+			}
 		}
 
-		// Create content object with metadata
-		content := content.GuidanceContent{
-			Title:       title,
-			Description: description,
+		// Create the model.Entity to be saved
+		entityToSave := model.Entity{
+			Alias:       alias,
+			Title:       titleToUse,
+			Description: createDescription,
 			Tags:        createTags,
 			Body:        actualBodyContent,
+			// CID and PCID will be handled by the backend/storage layer or if they become part of standard creation flow
+			// CustomMetadata can be added here if there's a mechanism to pass it via flags, for now it's empty.
 		}
 
-		// Generate file content with frontmatter
-		fileContent, err := content.ToFileContent()
+		slog.Debug("Attempting to save entity via EntityService", "alias", entityToSave.Alias, "backend", createBackend)
+
+		// Save the entity using EntityService
+		savedBackendName, err := appContext.EntityService.SaveEntity(entityToSave, createBackend)
 		if err != nil {
-			return fmt.Errorf("failed to generate guidance file content: %w", err)
-		}
-
-		// Write to file
-		if err := os.WriteFile(targetFilePath, fileContent, 0644); err != nil {
-			return fmt.Errorf("failed to write guidance file: %w", err)
-		}
-
-		// For test compatibility, we need to output relative paths
-		workingDir, err := os.Getwd()
-		if err == nil && strings.HasPrefix(targetFilePath, workingDir) {
-			// Output relative path for test compatibility
-			relativePath, err := filepath.Rel(workingDir, targetFilePath)
-			if err == nil {
-				slog.Debug("Created guidance file", "path", relativePath)
-			} else {
-				slog.Debug("Created guidance file", "path", targetFilePath)
+			slog.Error("Failed to save entity using EntityService", "alias", alias, "error", err)
+			if errors.Is(err, storage.ErrAmbiguousBackend) {
+				return fmt.Errorf("failed to create guidance '%s': %w. Please specify a backend using --backend or set default_backend in config", alias, err)
 			}
-		} else {
-			slog.Debug("Created guidance file", "path", targetFilePath)
+			return fmt.Errorf("failed to create guidance '%s': %w", alias, err)
 		}
-		// slog.Info("Successfully created guidance file", "path", targetFilePath)
 
-		// Return YAML representation of created entity for display
-		// metaDisplay := struct {
-		// 	Backend     string   `yaml:"backend"`
-		// 	Alias       string   `yaml:"alias"`
-		// 	Title       string   `yaml:"title"`
-		// 	Description string   `yaml:"description"`
-		// 	Tags        []string `yaml:"tags,omitempty"`
-		// 	Path        string   `yaml:"path"`
-		// }{
-		// 	Backend:     targetBackendName,
-		// 	Alias:       aliasOrPath,
-		// 	Title:       title,
-		// 	Description: description,
-		// 	Tags:        createTags,
-		// 	Path:        targetFilePath,
-		// }
-
-		// yamlData, err := yaml.Marshal(metaDisplay)
-		// if err != nil {
-		// 	return fmt.Errorf("failed to marshal entity metadata for display: %w", err)
-		// }
-		// fmt.Println(string(yamlData))
-
-		fmt.Printf("Created guidance %s on %s\n", aliasOrPath, targetBackendName)
+		slog.Info("Successfully created guidance.", "alias", alias, "backend", savedBackendName)
 
 		return nil
 	},

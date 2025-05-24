@@ -2,13 +2,15 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      Created guidance flag_test on default_local
       --- Content of .gydnc/flag_test.g6e: ---
       ---
       title: Flag Test Title
       ---
       This is body content from the --body flag.
-stderr: []
+stderr:
+  - match_type: EXACT # Since it's a single, specific log line
+    content: |
+      level=INFO msg="Successfully created guidance." alias=flag_test backend=default_local
 filesystem:
   - path: .gydnc/flag_test.g6e
     exists: true

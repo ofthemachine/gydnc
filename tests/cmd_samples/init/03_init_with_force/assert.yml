@@ -3,28 +3,45 @@ stdout:
   - match_type: ORDERED_LINES
     content: |
       === First initialization ===
-      # REGEX: ^Created guidance store: .*\.gydnc$
-      # REGEX: ^Created tag_ontology.md: .*\.gydnc/tag_ontology.md$
-      # REGEX: ^Created configuration file: .*\.gydnc/config.yml$
-      # REGEX: ^gydnc initialized successfully in .*$
-      # REGEX: To activate this configuration for your current session, you can run:
-      # REGEX:   export GYDNC_CONFIG=".*/\.gydnc/config.yml"
-      # REGEX: Consider adding this line to your shell configuration file \(e.g., ~/.zshrc or ~/.bashrc\) for persistent use.
-        Found 1 entities in backend: default_local
+
+      To activate this configuration for your current session, you can run:
+      # REGEX: .*export GYDNC_CONFIG.*\.gydnc/config\.yml.*
+      Consider adding this line to your shell configuration file (e.g., ~/.zshrc or ~/.bashrc) for persistent use.
+      [
+        {
+          "alias": "test-entity",
+          "title": "Test Entity",
+          "description": "",
+          "tags": null
+        }
+      ]
 
       === Second initialization without --force (should fail) ===
       Second init without --force failed as expected
+
       === Third initialization with --force (should succeed) ===
-      # REGEX: ^Created guidance store: .*\.gydnc$
-      # REGEX: ^Created tag_ontology.md: .*\.gydnc/tag_ontology.md$
-      # REGEX: ^Created configuration file: .*\.gydnc/config.yml$
-      # REGEX: ^gydnc initialized successfully in .*$
-      # REGEX: To activate this configuration for your current session, you can run:
-      # REGEX:   export GYDNC_CONFIG=".*/\.gydnc/config.yml"
-      # REGEX: Consider adding this line to your shell configuration file \(e.g., ~/.zshrc or ~/.bashrc\) for persistent use.
+
+      To activate this configuration for your current session, you can run:
+      # REGEX: .*export GYDNC_CONFIG.*\.gydnc/config\.yml.*
+      Consider adding this line to your shell configuration file (e.g., ~/.zshrc or ~/.bashrc) for persistent use.
+
       === Verify list still works after force init ===
-        Found 1 entities in backend: default_local
-stderr: []
+      [
+        {
+          "alias": "test-entity",
+          "title": "Test Entity",
+          "description": "",
+          "tags": null
+        }
+      ]
+stderr:
+  - match_type: ORDERED_LINES
+    content: |
+      # REGEX: level=INFO msg="Target base path for initialization set" path=.*
+      # REGEX: level=INFO msg="gydnc initialized successfully" path=.*
+      # REGEX: level=INFO msg="Successfully created guidance." alias=test-entity backend=default_local
+      # REGEX: level=INFO msg="Target base path for initialization set" path=.*
+      # REGEX: level=INFO msg="gydnc initialized successfully" path=.*
 filesystem:
   - path: ".gydnc"
     exists: true
@@ -32,4 +49,6 @@ filesystem:
   - path: ".gydnc/config.yml"
     exists: true
   - path: ".gydnc/tag_ontology.md"
+    exists: true
+  - path: ".gydnc/test-entity.g6e" # Check that entity is created/recreated
     exists: true

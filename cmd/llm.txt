@@ -6,7 +6,7 @@ This document outlines how an LLM should interact with the `gydnc` CLI to manage
 
 **MANDATORY FIRST STEP - NEVER SKIP:**
 ```bash
-gydnc list --json
+gydnc list
 ```
 
 ❌ **NEVER do these mistakes:**
@@ -28,7 +28,7 @@ gydnc list --json
 
 ### 1. List Available Guidance
 ```bash
-gydnc list --json
+gydnc list
 ```
 This shows all available guidance with metadata.
 
@@ -132,14 +132,14 @@ cat updated-content.md | gydnc update <alias>
 
 | Task | Command Pattern |
 |------|----------------|
-| List all | `gydnc list --json` |
+| List all | `gydnc listn` |
 | Get content | `gydnc get <alias>` |
 | Create new | `cat << 'EOF' \| gydnc create must/topic --title "Title" --tags "tags"` |
 | Update existing | `cat << 'EOF' \| gydnc update recipes/domain/action` |
 
 ## 🎯 Session Best Practices
 
-1. **Always start:** `gydnc list --json`
+1. **Always start:** `gydnc list`
 2. **Identify relevant:** Look for existing guidance before creating
 3. **Retrieve details:** `gydnc get <relevant-aliases>`
 4. **Adapt as needed:** Re-fetch when conversation evolves
@@ -151,7 +151,7 @@ cat updated-content.md | gydnc update <alias>
 
 ```bash
 # 1. Start with overview (MANDATORY)
-gydnc list --json
+gydnc list
 
 # 2. Get relevant guidance
 gydnc get must/safety-first should/code-style

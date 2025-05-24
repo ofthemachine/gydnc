@@ -1,0 +1,96 @@
+---
+title: Working with YAML Multi-line Strings
+description: Guidance on YAML multi-line strings (literal and folded blocks), focusing on when *not* to escape special characters.
+tags:
+    - type:recipe
+    - lang:yaml
+    - topic:strings
+    - topic:escaping
+---
+# Working with YAML Multi-line Strings
+
+This recipe provides guidance on how to correctly handle multi-line strings in YAML, particularly focusing on when *not* to escape special characters, which is a common source of confusion.
+
+## Key Principle: Literal Blocks and Folded Blocks
+
+YAML provides two main ways to handle multi-line strings cleanly without needing extensive escaping: Literal Block Scalar (`|`) and Folded Block Scalar (`>`)
+
+### 1. Literal Block Scalar (`|`)
+
+*   **Preserves newlines:** Each newline in your string is kept as a literal newline character.
+*   **No escaping needed for most characters:** Within a literal block, characters like `\` or `"` generally do not need to be escaped. They are treated as literal characters.
+*   **Indentation matters:** The content of the block is determined by its indentation relative to the first line.
+
+**Example:**
+```yaml
+description: |
+  This is a multi-line string.
+  It can contain "quotes" and backslashes \ without issues.
+  Newlines are preserved.
+  Each of these lines will appear on a new line.
+```
+
+**When to use:**
+Ideal for when you need to preserve the exact formatting of your multi-line text, including all newlines (e.g., poetry, code snippets, pre-formatted text).
+
+### 2. Folded Block Scalar (`>`)
+
+*   **Folds newlines:** Multiple lines of text are folded into a single line, with newlines typically replaced by spaces.
+*   **Blank lines become newlines:** A blank line within a folded block will result in a literal newline character in the output.
+*   **No escaping needed for most characters:** Similar to literal blocks, special characters usually don't require escaping.
+*   **Indentation matters.**
+
+**Example:**
+```yaml
+summary: >
+  This is a very long sentence that has been
+  folded over multiple lines in the YAML
+  source for readability. It will be treated
+  as a single line with spaces replacing the
+  newlines.
+
+  However, this new paragraph, started after
+  a blank line, will begin with a newline.
+```
+
+**When to use:**
+Best for long paragraphs or text where you want it to flow as a single string but need to wrap it in your YAML source for readability.
+
+## Common Pitfall: Unnecessary Escaping
+
+A frequent mistake is to apply escaping rules (e.g., from JSON or other programming language strings) inside YAML literal or folded blocks.
+
+*   **Incorrect (Over-escaping):**
+    ```yaml
+    # This is often unnecessary and can lead to literal backslashes in the output
+    regex_pattern: |
+      ^level=INFO msg=\"Successfully created guidance.\" alias=simple-delete-test backend=default_local$
+    ```
+
+*   **Correct (Usually No Escaping Needed):**
+    ```yaml
+    # For most regexes or strings with special characters, direct entry is fine
+    regex_pattern: |
+      ^level=INFO msg="Successfully created guidance." alias=simple-delete-test backend=default_local$
+    ```
+    Or, if the regex engine itself requires certain backslashes for its own syntax (e.g. `\d` for digit, `\[` for literal bracket), those are part of the *regex string itself*, not YAML escaping:
+    ```yaml
+    regex_pattern: |
+      ^level=INFO msg="Entities deleted." items=\[simple-delete-test \(backend: default_local\)\]$
+    ```
+
+**General Rule:**
+When using `|` or `>`, start by writing your string content *as is*. Only add escaping if the YAML parser complains or if the consuming application specifically requires certain characters to be escaped at the YAML level (which is rare for these block styles).
+
+## When is Escaping Still Relevant in YAML?
+
+Escaping is more commonly needed in:
+
+*   **Plain scalars (single-line strings):** Especially if they start with special characters (e.g., `&`, `*`, `{`, `[`, `!`, `%`, `'`, `"`).
+    ```yaml
+    problematic_key: "!special" # Quoting makes it a string
+    another_example: "a value with a 'single quote' inside"
+    ```
+*   **Quoted scalars (single or double quoted):** Where you might need to escape the quote character itself (e.g., `\'` in a single-quoted string).
+
+**Focus on `|` and `>` for multi-line content to simplify your life and reduce escaping errors.**

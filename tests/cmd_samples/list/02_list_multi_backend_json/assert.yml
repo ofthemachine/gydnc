@@ -4,31 +4,46 @@ stdout:
     content: |
       [
         {
-          "alias": "shared-entity",
-          "title": "Entity in BE1",
-          "description": "From backend 1",
-          "tags": [
-            "be1",
-            "shared"
-          ]
+          "alias": "entity1",
+          "title": "Entity 1 in BE1",
+          "description": "",
+          "tags": null
         },
         {
-          "alias": "shared-entity",
-          "title": "Entity in BE2",
-          "description": "From backend 2",
-          "tags": [
-            "be2",
-            "shared"
-          ]
+          "alias": "entity2",
+          "title": "Entity 2 in BE1",
+          "description": "",
+          "tags": null
         },
         {
-          "alias": "unique-entity",
-          "title": "Unique in BE2",
-          "description": "Unique entity",
-          "tags": [
-            "be2",
-            "unique"
-          ]
+          "alias": "entity3",
+          "title": "Entity 3 in BE2",
+          "description": "",
+          "tags": null
         }
       ]
-stderr: []
+stderr:
+  - match_type: SUBSTRING # Using SUBSTRING to be less brittle with potential extra attributes
+    content: "level=WARN msg=\"Alias found in multiple backends. Prioritizing version.\" alias=entity1 chosen_from_backend=backend1"
+  # It's safer to check for the core message and key attributes as substrings
+  # The order of attributes in slog TextHandler is not strictly guaranteed for all cases.
+  # - match_type: SUBSTRING
+  #   content: "alias=entity1"
+  # - match_type: SUBSTRING
+  #   content: "chosen_from_backend=backend1"
+  # - match_type: SUBSTRING
+  #   content: "ignored_backends=[backend2]"
+  # The full log might also include "all_found_in_backends=[backend1 backend2]"
+  # A regex might be more robust if the exact structure is important:
+  - match_type: REGEX
+    content: |
+      level=WARN msg=\"Alias found in multiple backends. Prioritizing version.\"(.*alias=entity1.*chosen_from_backend=backend1.*ignored_backends=\[backend2\].*|.*alias=entity1.*ignored_backends=\[backend2\].*chosen_from_backend=backend1.*)
+filesystem:
+  - path: backend1_data/entity1.g6e
+    exists: true
+  - path: backend1_data/entity2.g6e
+    exists: true
+  - path: backend2_data/entity1.g6e
+    exists: true
+  - path: backend2_data/entity3.g6e
+    exists: true

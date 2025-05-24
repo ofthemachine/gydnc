@@ -5,12 +5,9 @@ stdout:
       [
         {
           "alias": "test-entity",
+          "title": "Single Entity",
           "description": "A test entity",
-          "tags": [
-            "one",
-            "test"
-          ],
-          "title": "Single Entity"
+          "tags": ["one", "test"]
         }
       ]
 stderr: []

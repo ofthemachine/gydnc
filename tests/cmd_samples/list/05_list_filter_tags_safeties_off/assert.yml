@@ -1,25 +1,47 @@
 exit_code: 0
 stdout:
-  - match_type: JSON
+  - match_type: ORDERED_LINES # Check the full output including the separator
     content: |
       [
         {
-          "alias": "clarity-entity",
-          "description": "A clarity-related entity",
+          "alias": "entityA",
+          "title": "Entity A",
+          "description": "",
           "tags": [
-            "quality:clarity",
-            "scope:docs"
-          ],
-          "title": "Clarity Entity"
+            "experimental",
+            "feat",
+            "urgent"
+          ]
         },
         {
-          "alias": "performance-entity",
-          "description": "A performance-related entity",
+          "alias": "entityB",
+          "title": "Entity B",
+          "description": "",
           "tags": [
-            "quality:performance",
-            "scope:code"
-          ],
-          "title": "Performance Entity"
+            "bug",
+            "internal",
+            "urgent"
+          ]
+        }
+      ]
+      ---Filtering with safeties off---
+      [
+        {
+          "alias": "entityA",
+          "title": "Entity A",
+          "description": "",
+          "tags": [
+            "experimental",
+            "feat",
+            "urgent"
+          ]
         }
       ]
 stderr: []
+filesystem:
+  - path: test_data/entityA.g6e
+    exists: true
+  - path: test_data/entityB.g6e
+    exists: true
+  - path: test_data/entityC.g6e
+    exists: true
