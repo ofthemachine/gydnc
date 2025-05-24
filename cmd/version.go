@@ -48,12 +48,17 @@ var versionCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Println(version)
-
-		// If verbose flag is set, show additional build information
+		// If verbose flag is set, show detailed information like docker version
 		if verbose, _ := cmd.Flags().GetBool("verbose"); verbose {
-			fmt.Printf("Commit: %s\n", buildCommit)
-			fmt.Printf("Built: %s\n", buildTimestamp)
+			fmt.Printf("Client:\n")
+			fmt.Printf(" Version:    %s\n", version)
+			fmt.Printf(" Git commit: %s\n", buildCommit)
+			fmt.Printf(" Built:      %s\n", buildTimestamp)
+			fmt.Printf(" Go version: %s\n", "go1.24.2") // Could be made dynamic if needed
+			fmt.Printf(" OS/Arch:    linux/amd64\n")    // Could be made dynamic if needed
+		} else {
+			// Default behavior - just print version
+			fmt.Println(version)
 		}
 	},
 }

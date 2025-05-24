@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -11,10 +12,11 @@ import (
 )
 
 var (
-	cfgFile    string
-	verbosity  int
-	quiet      bool
-	appContext *service.AppContext // Exposed to be used by other files in cmd package
+	cfgFile     string
+	verbosity   int
+	quiet       bool
+	showVersion bool                // Add version flag
+	appContext  *service.AppContext // Exposed to be used by other files in cmd package
 )
 
 var rootCmd = &cobra.Command{
@@ -22,6 +24,25 @@ var rootCmd = &cobra.Command{
 	Short: "A tool for managing guidance documents",
 	Long: `gydnc streamlines the creation, management, and discovery of guidance documents.
 It aids in creating and maintaining documentation tailored to agent behavior and LLM prompting.`,
+	// Add Run function to handle the --version flag when no subcommand is provided
+	Run: func(cmd *cobra.Command, args []string) {
+		if showVersion {
+			// Use embedded version.txt as primary source, fallback to build-time info
+			version := strings.TrimSpace(versionString)
+			if version == "" || version == "dev-version" {
+				// Fallback to build-time version info
+				if buildVersion != "dev" {
+					version = buildVersion
+				} else {
+					version = "dev-version"
+				}
+			}
+			fmt.Println(version)
+			return
+		}
+		// If no version flag and no subcommand, show help
+		cmd.Help()
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -45,6 +66,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is empty, load via GYDNC_CONFIG env var or explicit path)")
 	rootCmd.PersistentFlags().CountVarP(&verbosity, "verbose", "v", "Increase logging verbosity (default: WARN, -v: INFO, -vv: DEBUG)")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "Suppress non-error log messages (equivalent to log level ERROR)")
+	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "V", false, "Show version and exit")
 
 	rootCmd.AddCommand(llmCmd) // llmCmd is defined in llm.go
 }
