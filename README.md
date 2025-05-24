@@ -13,15 +13,49 @@
 
 ## Installation
 
+### Quick Install (Recommended)
+
+**Linux/macOS (one-liner with automatic fallback):**
+```bash
+curl -sSL https://raw.githubusercontent.com/ofthemachine/gydnc/main/install.sh | sh
+```
+*This will try to download a pre-built binary, or automatically build from source if needed.*
+
+**Manual Download (when pre-built binaries are available):**
+```bash
+# Detect platform and download latest release
+PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')
+curl -L -o gydnc "https://github.com/ofthemachine/gydnc/releases/latest/download/gydnc-${PLATFORM}-${ARCH}"
+chmod +x gydnc && sudo mv gydnc /usr/local/bin/
+```
+
+**Platform-specific (when pre-built binaries are available):**
+```bash
+# Linux (x86_64)
+curl -L -o gydnc https://github.com/ofthemachine/gydnc/releases/latest/download/gydnc-linux-amd64
+chmod +x gydnc && sudo mv gydnc /usr/local/bin/
+
+# macOS (Intel)
+curl -L -o gydnc https://github.com/ofthemachine/gydnc/releases/latest/download/gydnc-darwin-amd64
+chmod +x gydnc && sudo mv gydnc /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -L -o gydnc https://github.com/ofthemachine/gydnc/releases/latest/download/gydnc-darwin-arm64
+chmod +x gydnc && sudo mv gydnc /usr/local/bin/
+```
+
+### Build from Source
+
 ```bash
 # Clone the repository
-git clone git@github.com:ofthemachine/gydnc.git
+git clone https://github.com/ofthemachine/gydnc.git
 
 # Build gydnc
 cd gydnc && make build
 
 # Move the binary to your PATH
-mv gydnc /usr/local/bin/  # or somewhere else on your PATH
+sudo mv gydnc /usr/local/bin/
 ```
 
 ## Getting Started
