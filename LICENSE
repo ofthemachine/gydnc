@@ -1,0 +1,31 @@
+gydnc - content-addressable guidance for AI agents
+Copyright (C) 2025  Tim Frison
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+================================================================================
+
+Additional permissions under GNU AGPL version 3 section 7:
+
+If you convey this program as part of a larger work, the guidance documents
+(.g6e files) and their content created, stored, or processed by this program
+are not considered part of the Program and are not subject to the terms of
+this License. This exception only applies to guidance content, not to
+modifications of the gydnc program itself.
+
+================================================================================
+
+Contact Information:
+Email: tim@frison.ca
+GitHub: @frison
