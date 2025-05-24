@@ -3,8 +3,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
-
-	// "log/slog" // To be used later
+	"log/slog" // To be used for debug logging
 	"os"
 	"path/filepath"
 	"strings"
@@ -285,12 +284,12 @@ If no body is provided, a default placeholder body will be generated.`,
 			// Output relative path for test compatibility
 			relativePath, err := filepath.Rel(workingDir, targetFilePath)
 			if err == nil {
-				fmt.Printf("Created guidance file: %s\n", relativePath)
+				slog.Debug("Created guidance file", "path", relativePath)
 			} else {
-				fmt.Printf("Created guidance file: %s\n", targetFilePath)
+				slog.Debug("Created guidance file", "path", targetFilePath)
 			}
 		} else {
-			fmt.Printf("Created guidance file: %s\n", targetFilePath)
+			slog.Debug("Created guidance file", "path", targetFilePath)
 		}
 		// slog.Info("Successfully created guidance file", "path", targetFilePath)
 

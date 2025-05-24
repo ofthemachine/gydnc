@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -225,7 +226,7 @@ the file will not be modified.`,
 			}
 		}
 
-		fmt.Printf("Updated guidance: %s\n", displayPath)
+		slog.Debug("Updated guidance file", "path", displayPath)
 		// slog.Info("Successfully updated guidance file", "path", displayPath)
 		return nil
 	},
@@ -237,6 +238,11 @@ the file will not be modified.`,
 // the backend's name, and an error if not found.
 func discoverEntityAcrossBackends(cfg *model.Config, alias string) (storage.Backend, string, string, error) {
 	var lastError error
+	var foundBackends []string
+	var foundBackend storage.Backend
+	var foundPath string
+	var foundBackendName string
+
 	for name, backendConfig := range cfg.StorageBackends {
 		if backendConfig.Type != "localfs" {
 			continue
@@ -255,12 +261,28 @@ func discoverEntityAcrossBackends(cfg *model.Config, alias string) (storage.Back
 		}
 		tempStore.SetName(name)
 
-		// Read directly from the temp store; if found, return immediately
+		// Read directly from the temp store; if found, store the match
 		_, stats, readErr := tempStore.Read(alias)
 		if readErr == nil && stats != nil {
 			// Successfully found the entity in this backend
-			return tempStore, alias, name, nil
+			foundBackends = append(foundBackends, name)
+			if foundBackend == nil {
+				// Store the first match
+				foundBackend = tempStore
+				foundPath = alias
+				foundBackendName = name
+			}
 		}
+	}
+
+	// Check if entity was found in multiple backends
+	if len(foundBackends) > 1 {
+		return nil, "", "", fmt.Errorf("entity '%s' found in multiple backends (%v); please specify which backend to update or ensure the entity exists in only one backend", alias, foundBackends)
+	}
+
+	// If we found exactly one, return it
+	if len(foundBackends) == 1 {
+		return foundBackend, foundPath, foundBackendName, nil
 	}
 
 	// If we get here, the entity was not found in any backend.
