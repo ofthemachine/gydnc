@@ -21,7 +21,7 @@ This document defines the standard tags used in this guidance store.
 - example: Sample code or configurations
 - deprecated: Features or approaches that should no longer be used
 
-Tags are `category:value` or `category:sub:value` (e.g., `lang:go`, `os:linux`, `repo:agentt`).
+Tags are `category:value` or `category:sub:value` (e.g., `lang:go`, `os:linux`, `repo:gydnc`).
 Tags are case-insensitive and can be combined.
 
 ## Core Tags
@@ -38,7 +38,7 @@ Tags are case-insensitive and can be combined.
 - os:linux
 - os:windows
 - os:macos
-- repo:agentt
+- repo:gydnc
 - repo:infra
 - repo:frontend
 - repo:backend

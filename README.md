@@ -15,10 +15,10 @@
 
 ```bash
 # Clone the repository
-git clone git@github.com:frison/agentt.git
+git clone git@github.com:ofthemachine/gydnc.git
 
 # Build gydnc
-cd agentt/gydnc && make build
+cd gydnc && make build
 
 # Move the binary to your PATH
 mv gydnc /usr/local/bin/  # or somewhere else on your PATH
@@ -120,5 +120,5 @@ gydnc includes a comprehensive integration test framework that uses a declarativ
 
 ```bash
 # Run integration tests
-cd gydnc && make test-integration
+make test-integration
 ```
