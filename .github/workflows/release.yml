@@ -1,0 +1,94 @@
+name: 🚀 Release gydnc
+
+on:
+  push:
+    paths:
+      - 'releases/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: 🛠 Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Get version from release file
+        id: version
+        run: |
+          # Find the latest release file
+          RELEASE_FILE=$(find releases/ -name "*.md" -type f | sort | tail -n1)
+          if [ -z "$RELEASE_FILE" ]; then
+            echo "No release file found"
+            exit 1
+          fi
+
+          # Extract version from filename (e.g., releases/v1.0.0.md -> v1.0.0)
+          VERSION=$(basename "$RELEASE_FILE" .md)
+          COMMIT_SHA=$(git rev-parse HEAD)
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "release_file=${RELEASE_FILE}" >> $GITHUB_OUTPUT
+
+          echo "Building version: ${VERSION}"
+          echo "Commit SHA: ${COMMIT_SHA}"
+
+      - name: Run basic tests
+        run: |
+          go test ./...
+
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@master
+        with:
+          args: '-no-fail ./...'
+
+      - name: Build multi-arch binaries
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          COMMIT_SHA="${{ steps.version.outputs.commit_sha }}"
+          SHORT_SHA="${{ steps.version.outputs.short_sha }}"
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Build for each platform
+          for platform in "linux/amd64" "darwin/amd64" "darwin/arm64"; do
+            GOOS=$(echo $platform | cut -d'/' -f1)
+            GOARCH=$(echo $platform | cut -d'/' -f2)
+            PLATFORM_NAME="${GOOS}-${GOARCH}"
+            VERSION_WITH_BUILD="${VERSION}+sha.${SHORT_SHA}.${PLATFORM_NAME}"
+
+            echo "Building ${PLATFORM_NAME}..."
+            echo "${VERSION_WITH_BUILD}" > cmd/version.txt
+
+            CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build \
+              -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT_SHA} -X main.buildTime=${BUILD_TIME}" \
+              -o "gydnc-${PLATFORM_NAME}" .
+
+            # Generate checksum
+            sha256sum "gydnc-${PLATFORM_NAME}" > "gydnc-${PLATFORM_NAME}.sha256"
+          done
+
+          # Create combined checksums
+          sha256sum gydnc-* | grep -v "\.sha256" > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: gydnc ${{ steps.version.outputs.version }}
+          body_path: ${{ steps.version.outputs.release_file }}
+          files: |
+            gydnc-*
+            checksums.txt
+          make_latest: true
