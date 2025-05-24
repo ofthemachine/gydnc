@@ -613,6 +613,10 @@ func compareStreamOutput(matchType, expectedContent, actualOutput, streamName st
 		if !strings.Contains(actualOutput, expectedContent) {
 			return fmt.Errorf("%s substring match failed. Expected to find:\n```\n%s\n```\nIn output:\n```\n%s\n```", streamName, expectedContent, actualOutput)
 		}
+	case "NOT_CONTAINS":
+		if strings.Contains(actualOutput, expectedContent) {
+			return fmt.Errorf("%s NOT_CONTAINS match failed. Expected NOT to find:\n```\n%s\n```\nBut found it in output:\n```\n%s\n```", streamName, expectedContent, actualOutput)
+		}
 	case "REGEX":
 		matched, err := regexp.MatchString(expectedContent, actualOutput)
 		if err != nil {
@@ -734,7 +738,7 @@ func compareStreamOutput(matchType, expectedContent, actualOutput, streamName st
 			}
 		}
 	default:
-		return fmt.Errorf("unknown match_type '%s' for %s assertion. Supported: EXACT, SUBSTRING, REGEX, JSON, YAML, UNORDERED_LINES, PARTIAL_YAML, GOLDEN, ORDERED_LINES", matchType, streamName)
+		return fmt.Errorf("unknown match_type '%s' for %s assertion. Supported: EXACT, SUBSTRING, NOT_CONTAINS, REGEX, JSON, YAML, UNORDERED_LINES, PARTIAL_YAML, GOLDEN, ORDERED_LINES", matchType, streamName)
 	}
 	return nil
 }

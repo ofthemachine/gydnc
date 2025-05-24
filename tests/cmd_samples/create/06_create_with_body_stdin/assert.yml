@@ -2,12 +2,13 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      Created guidance file: .gydnc/stdin_test.g6e
       --- Content of .gydnc/stdin_test.g6e: ---
       ---
       title: Stdin Test Title
       ---
       This is body content from stdin.
+  - match_type: NOT_CONTAINS
+    content: "Created guidance file:"
 stderr: []
 filesystem:
   - path: .gydnc/stdin_test.g6e
