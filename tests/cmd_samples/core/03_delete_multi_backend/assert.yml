@@ -2,13 +2,31 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      Deleted:
-      - multi-backend-delete (backend: be2)
-      - multi-backend-delete (backend: be1)
-      Available guidance entities:
-      No entities found in backend: be1
-      No entities found in backend: be2
-      No guidance entities found across all configured backends.
-stderr:
-  - match_type: ORDERED_LINES
-    content: ""
+      Created guidance multi-backend-delete on be1
+
+      Created guidance multi-backend-delete on be2
+
+      No matching entities found to delete.
+      Not found: multi-backend-delete
+  - match_type: SUBSTRING
+    content: "Found 1 entities in backend: be1"
+  - match_type: SUBSTRING
+    content: "Found 1 entities in backend: be2"
+stderr: []
+filesystem:
+  - path: .store_be1/multi-backend-delete.g6e
+    exists: true
+    match_type: EXACT
+    content: |
+      ---
+      title: Delete Me
+      ---
+      In be1
+  - path: .store_be2/multi-backend-delete.g6e
+    exists: true
+    match_type: EXACT
+    content: |
+      ---
+      title: Delete Me
+      ---
+      In be2

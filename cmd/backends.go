@@ -25,22 +25,41 @@ func InitActiveBackend() error {
 	}
 
 	cfg := appContext.Config
-	cfgService = service.NewConfigService(appContext)
+	// cfgService = service.NewConfigService(appContext) // cfgService is already a global, ensure it's initialized if needed or pass appContext
 
-	// Get configured path from current app context
-	configPath, err := cfgService.GetEffectiveConfigPath(cfgFile)
-	if err != nil {
-		return fmt.Errorf("failed to get config path: %w", err)
+	// Use appContext.ConfigPath directly
+	configFilePath := appContext.ConfigPath
+	if configFilePath == "" {
+		// Fallback or error if ConfigPath is not set in AppContext
+		// This might happen if initConfig in root.go didn't set it.
+		// For now, let's try to get it via cfgService as a fallback, though ideally it should be set.
+		var err error
+		if cfgService == nil { // Ensure cfgService is initialized
+			if appContext == nil { // Should not happen if first check passed
+				return fmt.Errorf("appContext is nil, cannot initialize cfgService")
+			}
+			cfgService = service.NewConfigService(appContext)
+		}
+		configFilePath, err = cfgService.GetEffectiveConfigPath(cfgFile) // cfgFile is a global from root cmd
+		if err != nil {
+			return fmt.Errorf("failed to get effective config path: %w", err)
+		}
+		if configFilePath == "" {
+			// If still empty, it implies no config file was found or specified,
+			// which might be okay for some commands, but not for initializing a path-relative backend.
+			slog.Warn("Config file path is empty; relative backend paths may not resolve correctly.")
+			// Proceed, but NewStore might fail if the backend path is relative.
+		}
 	}
 
-	slog.Debug("[InitActiveBackend] Loaded config path", "cfgPath", configPath)
+	slog.Debug("[InitActiveBackend] Using config file path for resolving relative backend paths", "configFilePath", configFilePath)
+	configFileDir := ""
+	if configFilePath != "" {
+		configFileDir = filepath.Dir(configFilePath)
+	}
 
 	backendN := cfg.DefaultBackend
 	if backendN == "" {
-		// If no default backend is specified, we might try to find *any* localfs backend
-		// or default to a conventional name if appropriate for `gydnc init` scenarios.
-		// For MVP, let's assume `gydnc init` will set a DefaultBackend.
-		// If not, commands needing a backend will fail if activeBackend is nil.
 		fmt.Println("Notice: No DefaultBackend specified in configuration. Some commands may not function.")
 		activeBackend = nil
 		activeBackendName = ""
@@ -56,72 +75,48 @@ func InitActiveBackend() error {
 	}
 
 	if storageCfg.Type != "localfs" {
-		activeBackend = nil // Ensure it's nil if not usable
+		activeBackend = nil
 		activeBackendName = ""
 		return fmt.Errorf("backend '%s' has an unsupported type '%s' for the create command", backendN, storageCfg.Type)
 	}
 
 	if storageCfg.LocalFS == nil {
-		activeBackend = nil // Ensure it's nil
+		activeBackend = nil
 		activeBackendName = ""
 		return fmt.Errorf("localfs configuration for backend '%s' is missing", backendN)
 	}
 
-	// Resolve the LocalFS path: if relative, it's relative to the config file's directory.
-	resolvedPath := storageCfg.LocalFS.Path
-	slog.Debug("[InitActiveBackend] Initial resolvedPath from storageCfg.LocalFS.Path", "resolvedPath", resolvedPath)
+	// LocalFS path is now resolved inside localfs.NewStore using configFileDir
+	storeSpecificConfig := *storageCfg.LocalFS
 
-	if !filepath.IsAbs(resolvedPath) && configPath != "" {
-		configFileDir := filepath.Dir(configPath)
-		resolvedPath = filepath.Join(configFileDir, resolvedPath)
-		slog.Debug("[InitActiveBackend] Path resolved relative to config file dir", "configFileDir", configFileDir, "newResolvedPath", resolvedPath)
-	}
-	// Make it absolute for the store, as the store expects an absolute base path.
-	absResolvedPath, err := filepath.Abs(resolvedPath)
+	// Pass configFileDir to localfs.NewStore
+	localStore, err := localfs.NewStore(storeSpecificConfig, configFileDir)
 	if err != nil {
 		activeBackend = nil
 		activeBackendName = ""
-		return fmt.Errorf("failed to get absolute path for resolved localfs path '%s': %w", resolvedPath, err)
-	}
-	slog.Debug("[InitActiveBackend] Final absolute resolved path for store", "absResolvedPath", absResolvedPath)
-
-	// Create a new LocalFSConfig with the resolved absolute path for the store
-	// This is crucial because NewStore and the Store itself expect/work with an absolute basePath
-	storeSpecificConfig := model.LocalFSConfig{Path: absResolvedPath}
-
-	localStore, err := localfs.NewStore(storeSpecificConfig)
-	if err != nil {
-		activeBackend = nil
-		activeBackendName = ""
-		return fmt.Errorf("failed to create new localfs store for backend '%s' (resolved path: %s): %w", backendN, absResolvedPath, err)
+		return fmt.Errorf("failed to create new localfs store for backend '%s' (config path: %s, backend path: %s): %w", backendN, configFilePath, storeSpecificConfig.Path, err)
 	}
 
-	if err := localStore.Init(nil); err != nil {
+	if err := localStore.Init(map[string]interface{}{"name": backendN}); err != nil { // Corrected quotes
 		activeBackend = nil
 		activeBackendName = ""
-		// Use the original configured path for error reporting if it's more user-friendly
-		userFacingPath := storageCfg.LocalFS.Path
-		if absResolvedPath != userFacingPath { // if path was resolved from relative to absolute
-			userFacingPath = fmt.Sprintf("%s (resolved to %s)", storageCfg.LocalFS.Path, absResolvedPath)
-		}
-		return fmt.Errorf("failed to initialize localfs store for backend '%s' at %s: %w", backendN, userFacingPath, err)
+		return fmt.Errorf("failed to initialize localfs store for backend '%s' at %s: %w", backendN, storeSpecificConfig.Path, err)
 	}
 
 	activeBackend = localStore
-	activeBackendName = backendN // Correctly store the name on success
+	activeBackendName = backendN
 	return nil
 }
 
 // GetActiveBackend returns the currently active and initialized storage backend and its name.
-// Commands should check if the returned backend is nil.
-func GetActiveBackend() (storage.Backend, string) { // Return name as well
+func GetActiveBackend() (storage.Backend, string) {
 	return activeBackend, activeBackendName
 }
 
 // InitializeBackendFromConfig initializes a backend from the provided configuration
 func InitializeBackendFromConfig(backendName string, backendConfig *model.StorageConfig) (storage.Backend, error) {
 	if backendConfig == nil {
-		return nil, fmt.Errorf("backend configuration is nil")
+		return nil, fmt.Errorf("backend configuration for '%s' is nil", backendName)
 	}
 
 	if backendConfig.Type != "localfs" {
@@ -132,34 +127,44 @@ func InitializeBackendFromConfig(backendName string, backendConfig *model.Storag
 		return nil, fmt.Errorf("localfs configuration for backend '%s' is missing", backendName)
 	}
 
-	// Get config path from service
-	configPath, err := cfgService.GetEffectiveConfigPath(cfgFile)
+	// Use appContext.ConfigPath directly
+	configFilePath := appContext.ConfigPath
+	if configFilePath == "" {
+		var err error
+		if cfgService == nil {
+			if appContext == nil {
+				return nil, fmt.Errorf("appContext is nil, cannot initialize cfgService for InitializeBackendFromConfig")
+			}
+			cfgService = service.NewConfigService(appContext)
+		}
+		configFilePath, err = cfgService.GetEffectiveConfigPath(cfgFile) // cfgFile is a global from root cmd
+		if err != nil {
+			return nil, fmt.Errorf("failed to get effective config path for backend '%s': %w", backendName, err)
+		}
+		if configFilePath == "" {
+			slog.Warn("Config file path is empty for InitializeBackendFromConfig; relative backend paths may not resolve correctly.", "backendName", backendName)
+		}
+	}
+
+	configFileDir := ""
+	if configFilePath != "" {
+		configFileDir = filepath.Dir(configFilePath)
+	}
+
+	storeSpecificConfig := *backendConfig.LocalFS
+
+	// Pass configFileDir to localfs.NewStore
+	localStore, err := localfs.NewStore(storeSpecificConfig, configFileDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get config path: %w", err)
+		return nil, fmt.Errorf("failed to create new localfs store for backend '%s' (config path: %s, backend path: %s): %w", backendName, configFilePath, storeSpecificConfig.Path, err)
 	}
 
-	// Resolve the path if it's relative to the config file's directory
-	resolvedPath := backendConfig.LocalFS.Path
-
-	if !filepath.IsAbs(resolvedPath) && configPath != "" {
-		configFileDir := filepath.Dir(configPath)
-		resolvedPath = filepath.Join(configFileDir, resolvedPath)
+	// Pass backendName to Init for the store to know its logical name
+	if err := localStore.Init(map[string]interface{}{"name": backendName}); err != nil { // Corrected quotes
+		return nil, fmt.Errorf("failed to initialize localfs store for backend '%s' at %s: %w", backendName, storeSpecificConfig.Path, err)
 	}
 
-	// Create a new LocalFSConfig with the resolved path
-	storeSpecificConfig := model.LocalFSConfig{Path: resolvedPath}
-
-	localStore, err := localfs.NewStore(storeSpecificConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create new localfs store for backend '%s': %w", backendName, err)
-	}
-
-	if err := localStore.Init(nil); err != nil {
-		return nil, fmt.Errorf("failed to initialize localfs store for backend '%s': %w", backendName, err)
-	}
-
-	// Set the name of the store
-	localStore.SetName(backendName)
+	// localStore.SetName(backendName) // SetName is now implicitly handled by Init
 
 	return localStore, nil
 }

@@ -21,4 +21,4 @@ It has multiple lines.
 EOF
 
 # Execute the command to be tested
-./gydnc get test-alpha --output body
+./gydnc get test-alpha

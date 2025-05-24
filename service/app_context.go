@@ -2,6 +2,7 @@ package service
 
 import (
 	"log/slog"
+	"path/filepath"
 
 	"gydnc/model"
 	"gydnc/storage"
@@ -10,8 +11,10 @@ import (
 // AppContext holds application-wide dependencies and configuration.
 // It is passed to service functions rather than relying on global state.
 type AppContext struct {
-	Config *model.Config
-	Logger *slog.Logger
+	Config      *model.Config
+	Logger      *slog.Logger
+	ActiveStore storage.Backend // Corrected type to storage.Backend
+	ConfigPath  string          // Path from which the active config was loaded
 }
 
 // NewAppContext creates a new AppContext with the provided configuration and logger.
@@ -24,6 +27,8 @@ func NewAppContext(cfg *model.Config, logger *slog.Logger) *AppContext {
 	return &AppContext{
 		Config: cfg,
 		Logger: logger,
+		// ActiveStore and ConfigPath are typically set after initial creation,
+		// e.g., during initConfig or by specific service initializers.
 	}
 }
 
@@ -43,7 +48,7 @@ func (ctx *AppContext) GetBackend(name string) (storage.ReadOnlyBackend, error) 
 		return nil, storage.ErrBackendNotFound
 	}
 
-	return storage.NewBackendFromConfig(name, backendCfg)
+	return storage.NewBackendFromConfig(name, backendCfg, filepath.Dir(ctx.ConfigPath))
 }
 
 // GetDefaultBackend returns the default backend as specified in the configuration.

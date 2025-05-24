@@ -13,7 +13,6 @@ import (
 	"gydnc/service"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -294,27 +293,29 @@ If no body is provided, a default placeholder body will be generated.`,
 		// slog.Info("Successfully created guidance file", "path", targetFilePath)
 
 		// Return YAML representation of created entity for display
-		metaDisplay := struct {
-			Backend     string   `yaml:"backend"`
-			Alias       string   `yaml:"alias"`
-			Title       string   `yaml:"title"`
-			Description string   `yaml:"description"`
-			Tags        []string `yaml:"tags,omitempty"`
-			Path        string   `yaml:"path"`
-		}{
-			Backend:     targetBackendName,
-			Alias:       aliasOrPath,
-			Title:       title,
-			Description: description,
-			Tags:        createTags,
-			Path:        targetFilePath,
-		}
+		// metaDisplay := struct {
+		// 	Backend     string   `yaml:"backend"`
+		// 	Alias       string   `yaml:"alias"`
+		// 	Title       string   `yaml:"title"`
+		// 	Description string   `yaml:"description"`
+		// 	Tags        []string `yaml:"tags,omitempty"`
+		// 	Path        string   `yaml:"path"`
+		// }{
+		// 	Backend:     targetBackendName,
+		// 	Alias:       aliasOrPath,
+		// 	Title:       title,
+		// 	Description: description,
+		// 	Tags:        createTags,
+		// 	Path:        targetFilePath,
+		// }
 
-		yamlData, err := yaml.Marshal(metaDisplay)
-		if err != nil {
-			return fmt.Errorf("failed to marshal entity metadata for display: %w", err)
-		}
-		fmt.Println(string(yamlData))
+		// yamlData, err := yaml.Marshal(metaDisplay)
+		// if err != nil {
+		// 	return fmt.Errorf("failed to marshal entity metadata for display: %w", err)
+		// }
+		// fmt.Println(string(yamlData))
+
+		fmt.Printf("Created guidance %s on %s\n", aliasOrPath, targetBackendName)
 
 		return nil
 	},

@@ -2,7 +2,7 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      Created guidance file: .gydnc/flag_test.g6e
+      Created guidance flag_test on default_local
       --- Content of .gydnc/flag_test.g6e: ---
       ---
       title: Flag Test Title
@@ -12,7 +12,7 @@ stderr: []
 filesystem:
   - path: .gydnc/flag_test.g6e
     exists: true
-    content_match_type: EXACT
+    match_type: EXACT
     content: |
       ---
       title: Flag Test Title

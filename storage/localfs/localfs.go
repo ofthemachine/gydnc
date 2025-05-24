@@ -3,265 +3,268 @@ package localfs
 import (
 	"fmt"
 	"io/fs"
-	"log/slog" // Standard library slog
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"gydnc/model"
-	// "gydnc/storage" // Not imported to avoid circular dependency if storage imports localfs indirectly
+	// "gydnc/storage" // REMOVED to break import cycle. Errors like ErrEntityNotFound will be handled by callers or via stdlib errors.
 )
 
 const g6eExt = ".g6e"
 
-// Store implements the storage.Backend interface for local filesystem.
+// Store implements the storage.Backend interface for local filesystem storage.
 type Store struct {
 	name     string
 	basePath string
-	fsys     fs.FS // For testing, allow injecting a filesystem
+	// capabilitiesMap stores the capabilities of this backend instance.
+	// The Capabilities() method from the interface will be used for external access.
+	capabilitiesMap map[string]bool
+	// ignoredFiles []string // Removed, as model.LocalFSConfig does not have IgnoredFiles
+	fsys fs.FS // For testing, allow injecting a filesystem. For real use, os.DirFS(resolvedPath)
 }
 
-// NewStore creates a new local filesystem backend.
-// The provided LocalFSConfig contains the root path for this store.
-func NewStore(cfg model.LocalFSConfig) (*Store, error) {
-	if cfg.Path == "" {
-		return nil, fmt.Errorf("localfs path cannot be empty")
-	}
-	absPath, err := filepath.Abs(cfg.Path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path for localfs store: %w", err)
-	}
-
-	// Ensure the base directory exists
-	// slog.Debug("Ensuring base directory for localfs store", "path", absPath)
-	if err := os.MkdirAll(absPath, 0750); err != nil { // 0750: rwxr-x---
-		return nil, fmt.Errorf("failed to create base directory '%s' for localfs store: %w", absPath, err)
+// NewStore creates a new Store instance for local filesystem operations.
+// configDir is the directory of the main gydnc config file, used to resolve cfg.Path if it's relative.
+func NewStore(cfg model.LocalFSConfig, configDir string) (*Store, error) {
+	resolvedPath := cfg.Path
+	if !filepath.IsAbs(resolvedPath) {
+		if configDir == "" {
+			return nil, fmt.Errorf("configDir is required to resolve relative path: %s", cfg.Path)
+		}
+		resolvedPath = filepath.Join(configDir, resolvedPath)
 	}
 
+	// Ensure the base path exists
+	if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(resolvedPath, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create base directory '%s': %w", resolvedPath, err)
+		}
+	}
 	return &Store{
-		basePath: absPath,
-		// Name can be set via Init or a dedicated setter if needed, or passed in NewStore
+		name:     "localfs", // Default name, can be overridden by SetName
+		basePath: resolvedPath,
+		// ignoredFiles: cfg.IgnoredFiles, // Removed
+		capabilitiesMap: map[string]bool{ // Renamed field
+			"listable":  true,
+			"readable":  true,
+			"writable":  true,
+			"deletable": true,
+		},
+		fsys: os.DirFS(resolvedPath),
 	}, nil
 }
 
-// Init initializes the localfs store. The name is derived from metadata if provided.
-// For localfs, metadata is not strictly required for basic operation beyond setting the name.
-func (s *Store) Init(metadata map[string]interface{}) error {
-	// slog.Debug("Initializing localfs store", "basePath", s.basePath)
-	if s.basePath == "" {
-		return fmt.Errorf("basePath cannot be empty for localfs store, ensure NewStore was called with valid config")
-	}
-	// Check if basePath exists and is a directory
-	info, err := os.Stat(s.basePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("basePath '%s' does not exist for localfs store", s.basePath)
-		}
-		return fmt.Errorf("failed to stat basePath '%s': %w", s.basePath, err)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("basePath '%s' is not a directory", s.basePath)
-	}
-
-	if name, ok := metadata["name"].(string); ok {
+// Init initializes the local filesystem store.
+// The 'name' for the store can be passed via initConfig["name"].
+func (s *Store) Init(initConfig map[string]interface{}) error {
+	if name, ok := initConfig["name"].(string); ok {
 		s.name = name
 	}
-	// The empty else block that was here has been removed to clear SA9003.
-	// Fallback name logic (if any) would go here or GetName() would handle it.
-
-	s.fsys = os.DirFS(s.basePath) // Use the real filesystem
-	return nil
+	if s.basePath == "" {
+		return fmt.Errorf("basePath is not set for localfs store '%s'", s.name)
+	}
+	_, err := os.Stat(s.basePath)
+	if os.IsNotExist(err) {
+		return os.MkdirAll(s.basePath, 0755)
+	}
+	return err
 }
 
-// GetName returns the name of the backend instance.
+// GetName returns the name of this backend store instance.
 func (s *Store) GetName() string {
-	if s.name == "" {
-		// Attempt to derive a default name from the base path if not set
-		return filepath.Base(s.basePath)
-	}
 	return s.name
 }
 
-// SetName sets the name of the backend instance.
-func (s *Store) SetName(name string) {
-	s.name = name
-}
-
-// GetBasePath returns the root path of this localfs store.
+// GetBasePath returns the resolved, absolute base path of the store.
 func (s *Store) GetBasePath() string {
 	return s.basePath
 }
 
-// resolvePath converts an ID (alias) to an absolute path within the store.
-// It ensures the path is still within the store's basePath.
-func (s *Store) resolvePath(id string) (string, error) {
-	if strings.Contains(id, "..") { // Basic path traversal protection
-		return "", fmt.Errorf("invalid id: '%s' contains '..'", id)
-	}
-	if filepath.IsAbs(id) {
-		return "", fmt.Errorf("invalid id: '%s' must be a relative path/alias", id)
-	}
-	// Ensure it has the .g6e extension. This was previously handled in cmd,
-	// but makes sense for the storage backend to enforce or manage its own file types.
-	// However, the interface uses 'id' generically. For now, assume id is alias WITHOUT extension.
-	fileName := id + g6eExt
-	absPath := filepath.Join(s.basePath, fileName)
-
-	// Security check: Ensure the resolved path is still within the basePath
-	rel, err := filepath.Rel(s.basePath, absPath)
-	if err != nil {
-		return "", fmt.Errorf("could not make path relative: %w", err)
-	}
-	if strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("resolved path '%s' is outside of store basePath '%s'", absPath, s.basePath)
-	}
-
-	return absPath, nil
+// SetName sets the name of this backend store instance.
+// This is useful if the store is created and then later associated with a named backend config.
+func (s *Store) SetName(name string) {
+	s.name = name
 }
 
-// Read retrieves the content of a guidance entity by its ID (alias).
-// For localfs, id is the filename without extension.
-func (s *Store) Read(id string) ([]byte, map[string]interface{}, error) {
-	filePath, err := s.resolvePath(id)
-	if err != nil {
-		return nil, nil, fmt.Errorf("read: invalid id or path resolution for '%s': %w", id, err)
+// Capabilities returns the capabilities of this backend.
+func (s *Store) Capabilities() map[string]bool {
+	// Return a copy to prevent external modification if that's a concern,
+	// or return s.capabilitiesMap directly if it's considered read-only by convention.
+	// For now, returning the direct map.
+	if s.capabilitiesMap == nil { // Ensure it's initialized if Store was somehow created without NewStore
+		s.capabilitiesMap = map[string]bool{
+			"listable":  true,
+			"readable":  true,
+			"writable":  true,
+			"deletable": true,
+		}
 	}
+	return s.capabilitiesMap
+}
 
-	// slog.Debug("Reading file", "path", filePath)
-	content, err := os.ReadFile(filePath)
+// IsWritable indicates if the backend supports write operations.
+func (s *Store) IsWritable() bool {
+	// Check the capability map, default to true for localfs if not set.
+	if val, ok := s.capabilitiesMap["writable"]; ok {
+		return val
+	}
+	return true // Default for localfs
+}
+
+// isIgnored checks if a given filename matches any of the ignored patterns.
+// Currently uses simple string equality. Could be expanded to glob patterns.
+// This method was assuming s.ignoredFiles, which has been removed.
+// If ignore functionality is needed, it must be re-implemented based on a proper config source.
+func (s *Store) isIgnored(name string) bool {
+	// for _, pattern := range s.ignoredFiles { // s.ignoredFiles is removed
+	// 	if pattern == name {
+	// 		return true
+	// 	}
+	// }
+	// Example of how it might work if IgnoredFiles were part of model.LocalFSConfig and passed to Store:
+	// if s.config != nil { // Assuming Store had a field like `config model.LocalFSConfig`
+	// 	for _, pattern := range s.config.IgnoredFiles {
+	// 		if pattern == name {
+	// 			return true
+	// 		}
+	// 	}
+	// }
+	return false // Placeholder: No ignore patterns currently configured this way
+}
+
+// Read retrieves the content of a guidance entity.
+func (s *Store) Read(alias string) ([]byte, map[string]interface{}, error) {
+	fileName := alias + g6eExt
+	if s.isIgnored(fileName) {
+		// Use fs.ErrNotExist for a generic "not found" that callers can interpret.
+		return nil, nil, fmt.Errorf("%w: entity is ignored: %s", fs.ErrNotExist, alias)
+	}
+	filePath := filepath.Join(s.basePath, fileName)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil, fs.ErrNotExist // Use fs.ErrNotExist for consistency
+			return nil, nil, fs.ErrNotExist // Standard library error
 		}
-		return nil, nil, fmt.Errorf("failed to read file '%s': %w", filePath, err)
+		return nil, nil, err
 	}
-
-	// For localfs, "path" in metadata is the id itself (relative path/alias)
-	// "backend_name" should be s.GetName()
-	metadata := map[string]interface{}{
-		"path":         id,
-		"backend_name": s.GetName(),
-		"full_path":    filePath, // Could be useful for debugging or context
-	}
-	return content, metadata, nil
+	// For localfs, metadata might be minimal or derived from file system properties if needed.
+	// Returning nil for now, as .g6e files embed their own metadata.
+	return data, nil, nil
 }
 
-// Write saves the content of a guidance entity by its ID (alias).
-// For localfs, id is the filename without extension.
-// Metadata changed to map[string]string to align with compiler's view of storage.Backend interface.
-func (s *Store) Write(id string, content []byte, metadata map[string]string) error {
-	filePath, err := s.resolvePath(id)
-	if err != nil {
-		return fmt.Errorf("write: invalid id or path resolution for '%s': %w", id, err)
+// Write creates or updates a guidance entity.
+func (s *Store) Write(alias string, data []byte, commitMsgDetails map[string]string) error {
+	if !s.IsWritable() {
+		return fs.ErrPermission // Standard library error for read-only or permission issues
 	}
-
-	// Ensure the directory for the file exists (if id includes subdirs, e.g., "group/myalias")
+	fileName := alias + g6eExt
+	if s.isIgnored(fileName) {
+		return fmt.Errorf("cannot write to ignored entity: %s", alias)
+	}
+	filePath := filepath.Join(s.basePath, fileName)
+	// Ensure the directory for the file exists if alias contains path separators
 	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0750); err != nil {
-		return fmt.Errorf("failed to create directory '%s' for writing: %w", dir, err)
-	}
-
-	// slog.Debug("Writing file", "path", filePath, "metadata", metadata) // Metadata is map[string]string
-	err = os.WriteFile(filePath, content, 0640) // rw-r-----
-	if err != nil {
-		return fmt.Errorf("failed to write file '%s': %w", filePath, err)
-	}
-	return nil
-}
-
-// Delete removes a guidance entity by its ID (alias).
-func (s *Store) Delete(id string) error {
-	filePath, err := s.resolvePath(id)
-	if err != nil {
-		return fmt.Errorf("delete: invalid id or path resolution for '%s': %w", id, err)
-	}
-
-	// slog.Debug("Deleting file", "path", filePath)
-	err = os.Remove(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fs.ErrNotExist // Consistent error for not found
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory for entity '%s': %w", alias, err)
 		}
-		return fmt.Errorf("failed to delete file '%s': %w", filePath, err)
 	}
-	return nil
+	return os.WriteFile(filePath, data, 0644)
 }
 
-// Stat returns metadata about a guidance entity by its ID (alias).
-func (s *Store) Stat(id string) (map[string]interface{}, error) {
-	filePath, err := s.resolvePath(id)
-	if err != nil {
-		return nil, fmt.Errorf("stat: invalid id or path resolution for '%s': %w", id, err)
-	}
-
-	// slog.Debug("Stating file", "path", filePath)
-	fileInfo, err := os.Stat(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fs.ErrNotExist
-		}
-		return nil, fmt.Errorf("failed to stat file '%s': %w", filePath, err)
-	}
-
-	metadata := map[string]interface{}{
-		"id":           id, // The alias
-		"path":         id, // Relative path is the ID for localfs
-		"full_path":    filePath,
-		"size":         fileInfo.Size(),
-		"mod_time":     fileInfo.ModTime(),
-		"is_dir":       fileInfo.IsDir(), // Should always be false for .g6e files
-		"backend_name": s.GetName(),
-	}
-	return metadata, nil
-}
-
-// List retrieves a list of guidance entity IDs (aliases) based on a prefix.
-// If prefix is empty, it lists all entities in the backend.
-// Returns a list of IDs (strings) and conforms to the updated storage.Backend interface.
+// List retrieves a list of all guidance entity aliases (filenames without .g6e).
+// The prefix parameter is not deeply implemented here yet for hierarchical listing;
+// it currently lists all .g6e files under basePath.
 func (s *Store) List(prefix string) ([]string, error) {
-	slog.Debug("[localfs.List] Called with store basePath", "s.basePath", s.basePath, "prefix", prefix)
-	var results []string
+	var aliases []string
+	// Convert basepath to use OS-specific separators for WalkDir
+	searchPath := filepath.FromSlash(s.basePath)
 
-	err := filepath.WalkDir(s.basePath, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(searchPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err // Propagate errors
+			// Log the error but try to continue if possible, unless it's a critical path error.
+			slog.Warn("Error during filepath.WalkDir for List operation", "path", path, "error", err)
+			// If the root searchPath itself is inaccessible, return the error.
+			if path == searchPath && os.IsNotExist(err) {
+				return fmt.Errorf("base path for store does not exist: %s; %w", searchPath, err)
+			}
+			// For other errors (e.g., permission denied on a sub-object), skip and continue.
+			return nil // Continue walking if it's a non-critical error on a specific file/dir
 		}
 
-		if !d.IsDir() && strings.HasSuffix(d.Name(), g6eExt) {
-			relPath, relErr := filepath.Rel(s.basePath, path)
-			if relErr != nil {
-				return relErr
-			}
-
-			id := strings.TrimSuffix(relPath, g6eExt)
-
-			if prefix == "" || strings.HasPrefix(id, prefix) {
-				results = append(results, id)
+		// Process only files, not directories
+		if !d.IsDir() {
+			// Check if it's a .g6e file
+			if strings.HasSuffix(d.Name(), ".g6e") {
+				// Calculate alias relative to the basePath
+				relPath, err := filepath.Rel(searchPath, path)
+				if err != nil {
+					slog.Warn("Could not determine relative path for List operation", "basePath", searchPath, "filePath", path, "error", err)
+					return nil // Continue walking
+				}
+				alias := strings.TrimSuffix(filepath.ToSlash(relPath), ".g6e") // Use ToSlash for consistent alias format
+				if !s.isIgnored(d.Name()) {                                    // Check if the original filename would be ignored
+					// Apply prefix filter if present
+					if prefix == "" || strings.HasPrefix(alias, prefix) {
+						aliases = append(aliases, alias)
+					}
+				}
 			}
 		}
 		return nil
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to list entity IDs in '%s': %w", s.basePath, err)
+		// This error is from filepath.WalkDir if it was halted by a returned error.
+		// Most errors within the walk function are handled to allow continuation.
+		return nil, fmt.Errorf("error walking directory '%s': %w", searchPath, err)
 	}
-
-	return results, nil
+	return aliases, nil
 }
 
-// Add IsWritable method to satisfy the new Backend interface
-func (s *Store) IsWritable() bool {
-	return true
+// Delete removes a guidance entity file.
+func (s *Store) Delete(alias string) error {
+	if !s.IsWritable() { // Or check a specific "deletable" capability
+		return fmt.Errorf("delete operation not supported by backend '%s': %w", s.name, fs.ErrPermission) // Use fs.ErrPermission
+	}
+	canDelete, ok := s.capabilitiesMap["deletable"]
+	if !ok || !canDelete {
+		return fmt.Errorf("%w: delete operation not supported by backend '%s'", fs.ErrPermission, s.name)
+	}
+	fileName := alias + g6eExt
+	if s.isIgnored(fileName) {
+		return fmt.Errorf("cannot delete ignored entity: %s", alias)
+	}
+	filePath := filepath.Join(s.basePath, fileName)
+	err := os.Remove(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fs.ErrNotExist // Standard library error
+		}
+		return err
+	}
+	return nil
 }
 
-// Capabilities returns a map of capability names to boolean values.
-// This allows for feature detection and future extensibility.
-func (s *Store) Capabilities() map[string]bool {
-	return map[string]bool{
-		"write":  true,
-		"delete": true,
-		"list":   true,
-		"read":   true,
-		"stat":   true,
+// Stat is not deeply implemented, returns basic info for localfs.
+func (s *Store) Stat(alias string) (map[string]interface{}, error) {
+	fileName := alias + g6eExt
+	if s.isIgnored(fileName) {
+		return nil, fmt.Errorf("%w: entity is ignored: %s", fs.ErrNotExist, alias)
 	}
+	filePath := filepath.Join(s.basePath, fileName)
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fs.ErrNotExist // Standard library error
+		}
+		return nil, err
+	}
+	return map[string]interface{}{
+		"size":     fileInfo.Size(),
+		"mod_time": fileInfo.ModTime(),
+		"name":     fileInfo.Name(),
+	}, nil
 }

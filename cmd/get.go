@@ -8,25 +8,10 @@ import (
 
 	"gydnc/core/content"
 	"gydnc/model"
+	"gydnc/storage"
 
 	"github.com/spf13/cobra"
 )
-
-var outputFormatGet string
-
-// --- Structs for "structured" JSON output ---
-// OLD STRUCTS:
-// type StructuredGuidanceOutput struct {
-// 	ID          string          `json:"id"`
-// 	Frontmatter FrontmatterData `json:"frontmatter"`
-// 	Body        string          `json:"body"`
-// }
-//
-// type FrontmatterData struct {
-// 	Title       string   `json:"title"`
-// 	Description string   `json:"description,omitempty"`
-// 	Tags        []string `json:"tags,omitempty"`
-// }
 
 // NEW SIMPLIFIED STRUCT for "structured" (default) JSON output
 type SimplifiedStructuredOutput struct {
@@ -36,189 +21,138 @@ type SimplifiedStructuredOutput struct {
 	Body        string   `json:"body"`
 }
 
-// --- End structs for "structured" JSON output ---
-
-// Helper struct for "json-frontmatter" output (was jsonFrontmatterOutput)
-type JsonFrontmatterOnlyOutput struct {
-	// ID          string   `json:"id"` // Removed: do not output 'id' in json-frontmatter mode
-	Title       string   `json:"title"`
-	Description string   `json:"description,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-}
-
 var getCmd = &cobra.Command{
 	Use:   "get <id1> [id2...]",
-	Short: "Retrieves and displays one or more guidance entities by their ID(s) via the backend.",
+	Short: "Retrieves and displays one or more guidance entities by their ID(s) as JSON.",
 	Long: `Retrieves and displays the content of one or more guidance entities
-from the configured backend, based on their IDs.
-
-You can specify the output format using the --output flag:
-- structured (default): Displays ID, parsed frontmatter, and body as a JSON object (or array).
-- json-frontmatter: Displays only ID and parsed frontmatter as a JSON object (or array).
-- yaml-frontmatter: Displays only parsed frontmatter as YAML.
-- body: Displays only the Markdown body content.`,
+from the configured backend, based on their IDs. Output is always in JSON format
+containing title, description, tags, and body.`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		idsToGet := args
-		backend, _ := GetActiveBackend()
-		if backend == nil {
-			slog.Error("Active backend not initialized")
-			return fmt.Errorf("active backend not initialized; run 'gydnc init' or check config")
+
+		if appContext == nil || appContext.Config == nil {
+			slog.Error("Application context or configuration not initialized.")
+			return fmt.Errorf("application context or configuration not initialized")
 		}
 
-		var simplifiedStructuredResults []SimplifiedStructuredOutput // NEW
-		var jsonFrontmatterResults []JsonFrontmatterOnlyOutput
+		// Get all initialized backends from the appContext
+		// The GetAllBackends method in AppContext should handle initialization and path resolution internally.
+		allConfiguredBackends, backendErrors := appContext.GetAllBackends()
 
-		if len(idsToGet) > 1 {
-			switch outputFormatGet {
-			case "structured":
-				simplifiedStructuredResults = make([]SimplifiedStructuredOutput, 0, len(idsToGet)) // NEW
-			case "json-frontmatter":
-				jsonFrontmatterResults = make([]JsonFrontmatterOnlyOutput, 0, len(idsToGet))
+		if len(allConfiguredBackends) == 0 && len(backendErrors) > 0 {
+			slog.Error("No backends could be initialized. Please check backend configurations.")
+			for name, err := range backendErrors {
+				fmt.Fprintf(os.Stderr, "Error initializing backend '%s': %v\n", name, err)
 			}
+			return fmt.Errorf("no backends could be initialized")
+		}
+		if len(allConfiguredBackends) == 0 {
+			slog.Error("No backends available or configured.")
+			return fmt.Errorf("no backends available or configured")
+		}
+
+		var results []SimplifiedStructuredOutput
+		if len(idsToGet) > 1 {
+			results = make([]SimplifiedStructuredOutput, 0, len(idsToGet))
 		}
 
 		for _, id := range idsToGet {
-			slog.Debug("Attempting to get guidance from backend", "id", id, "format", outputFormatGet, "backend", backend.GetName())
+			var foundEntity *model.Entity
+			var lastReadError error
 
-			contentBytes, meta, err := backend.Read(id)
-			if err != nil {
-				slog.Error("Failed to read guidance from backend", "id", id, "backend", backend.GetName(), "error", err)
-				fmt.Fprintf(os.Stderr, "Error getting ID %s: %v\n", id, err)
-				// Add placeholder for error to respective results slice if in multi-ID JSON mode
-				if len(idsToGet) > 1 {
-					switch outputFormatGet {
-					case "structured":
-						simplifiedStructuredResults = append(simplifiedStructuredResults, SimplifiedStructuredOutput{Title: "ERROR_FETCHING_CONTENT_FOR_" + id, Body: "ERROR_FETCHING_CONTENT"}) // NEW
-					case "json-frontmatter":
-						jsonFrontmatterResults = append(jsonFrontmatterResults, JsonFrontmatterOnlyOutput{Title: "ERROR_FETCHING_CONTENT"})
-					}
-				}
-				continue
-			}
-
-			parsedContent, parseErr := content.ParseG6E(contentBytes)
-			if parseErr != nil {
-				slog.Error("Failed to parse G6E content", "id", id, "format", outputFormatGet, "error", parseErr)
-				fmt.Fprintf(os.Stderr, "Error parsing ID %s: %v\n", id, parseErr)
-				// Add placeholder for error to respective results slice if in multi-ID JSON mode and parsing is needed
-				if len(idsToGet) > 1 {
-					switch outputFormatGet {
-					case "structured":
-						simplifiedStructuredResults = append(simplifiedStructuredResults, SimplifiedStructuredOutput{Title: "ERROR_PARSING_CONTENT_FOR_" + id, Body: "ERROR_PARSING_CONTENT"}) // NEW
-					case "json-frontmatter":
-						jsonFrontmatterResults = append(jsonFrontmatterResults, JsonFrontmatterOnlyOutput{Title: "ERROR_PARSING_CONTENT"})
-						// yaml-frontmatter and body also need parsing but don't collect into a single JSON array at the end
-					}
-				}
-				// Since all remaining formats require parsing, if parsing fails, continue to the next ID.
-				continue
-			}
-
-			entity := model.Entity{
-				Alias:          id,
-				SourceBackend:  backend.GetName(),
-				Title:          parsedContent.Title,
-				Description:    parsedContent.Description,
-				Tags:           parsedContent.Tags,
-				CustomMetadata: meta, // Optionally filter meta fields
-				Body:           parsedContent.Body,
-			}
-			cid, _ := parsedContent.GetContentID()
-			entity.CID = cid
-
-			switch outputFormatGet {
-			case "structured":
-				structuredData := struct {
-					Title       string   `json:"title"`
-					Description string   `json:"description,omitempty"`
-					Tags        []string `json:"tags,omitempty"`
-					Body        string   `json:"body"`
-				}{
-					Title:       entity.Title,
-					Description: entity.Description,
-					Tags:        entity.Tags,
-					Body:        entity.Body,
-				}
-				if len(idsToGet) > 1 {
-					simplifiedStructuredResults = append(simplifiedStructuredResults, SimplifiedStructuredOutput{
-						Title:       entity.Title,
-						Description: entity.Description,
-						Tags:        entity.Tags,
-						Body:        entity.Body,
-					})
-				} else {
-					jsonBytes, err := json.MarshalIndent(structuredData, "", "  ")
-					if err != nil {
-						slog.Error("Failed to marshal structured data to JSON", "id", id, "error", err)
-						fmt.Fprintf(os.Stderr, "Error marshalling structured JSON for ID %s: %v\n", id, err)
-						continue
-					}
-					fmt.Fprintln(os.Stdout, string(jsonBytes))
-				}
-			case "json-frontmatter":
-				jsonData := JsonFrontmatterOnlyOutput{
-					// ID:          entity.CID, // Removed: do not output 'id' in json-frontmatter mode
-					Title:       entity.Title,
-					Description: entity.Description,
-					Tags:        entity.Tags,
-				}
-				if len(idsToGet) > 1 {
-					jsonFrontmatterResults = append(jsonFrontmatterResults, jsonData)
-				} else {
-					jsonBytes, err := json.MarshalIndent(jsonData, "", "  ")
-					if err != nil {
-						slog.Error("Failed to marshal frontmatter to JSON", "id", id, "error", err)
-						fmt.Fprintf(os.Stderr, "Error marshalling JSON frontmatter for ID %s: %v\n", id, err)
-						continue
-					}
-					fmt.Fprintln(os.Stdout, string(jsonBytes))
-				}
-			case "yaml-frontmatter": // Was "yaml"
-				yamlBytes, err := parsedContent.MarshalFrontmatter() // This method produces YAML
-				if err != nil {
-					slog.Error("Failed to marshal frontmatter to YAML", "id", id, "error", err)
-					fmt.Fprintf(os.Stderr, "Error marshalling YAML for ID %s: %v\n", id, err)
+			// Iterate through the map of initialized ReadOnlyBackend instances
+			for backendName, currentBackendStore := range allConfiguredBackends {
+				if currentBackendStore == nil { // Should ideally not happen if GetAllBackends filters failed ones
+					slog.Warn("Encountered nil backend store, skipping.", "backendName", backendName)
 					continue
 				}
-				fmt.Fprint(os.Stdout, string(yamlBytes))
-			case "body":
-				fmt.Fprint(os.Stdout, entity.Body)
-				if len(entity.Body) > 0 && entity.Body[len(entity.Body)-1] != '\n' {
-					fmt.Fprintln(os.Stdout)
-				}
-			default:
-				slog.Error("Unknown output format specified", "format", outputFormatGet)
-				return fmt.Errorf("unknown output format: %s. Valid formats are: structured, json-frontmatter, yaml-frontmatter, body", outputFormatGet)
-			}
-		}
 
-		// Finalize JSON array outputs if multiple IDs were processed
-		if len(idsToGet) > 1 {
-			switch outputFormatGet {
-			case "structured":
-				finalJsonBytes, err := json.MarshalIndent(simplifiedStructuredResults, "", "  ") // NEW
-				if err != nil {
-					slog.Error("Failed to marshal final structured JSON array", "error", err)
-					return fmt.Errorf("marshalling final structured JSON array: %w", err)
-				}
-				fmt.Fprintln(os.Stdout, string(finalJsonBytes))
-			case "json-frontmatter":
-				finalJsonBytes, err := json.MarshalIndent(jsonFrontmatterResults, "", "  ")
-				if err != nil {
-					slog.Error("Failed to marshal final JSON frontmatter array", "error", err)
-					return fmt.Errorf("marshalling final JSON frontmatter array: %w", err)
-				}
-				fmt.Fprintln(os.Stdout, string(finalJsonBytes))
-			}
-		}
+				slog.Debug("Attempting to get guidance from backend", "id", id, "backend", currentBackendStore.GetName())
+				contentBytes, meta, readErr := currentBackendStore.Read(id)
 
-		// Do not print any entity list, summary, or extra output after the JSON/YAML/body output.
+				if readErr == nil {
+					parsedData, parseErr := content.ParseG6E(contentBytes)
+					if parseErr != nil {
+						slog.Error("Failed to parse G6E content after successful read", "id", id, "backend", currentBackendStore.GetName(), "error", parseErr)
+						lastReadError = fmt.Errorf("parsing %s from %s: %w", id, currentBackendStore.GetName(), parseErr)
+						foundEntity = nil
+						break
+					}
+
+					cidValue, _ := parsedData.GetContentID()
+					foundEntity = &model.Entity{
+						Alias:          id,
+						SourceBackend:  currentBackendStore.GetName(),
+						Title:          parsedData.Title,
+						Description:    parsedData.Description,
+						Tags:           parsedData.Tags,
+						CustomMetadata: meta,
+						Body:           parsedData.Body,
+						CID:            cidValue,
+					}
+					lastReadError = nil
+					break
+				} else {
+					if os.IsNotExist(readErr) || readErr == storage.ErrEntityNotFound { // Corrected to use ErrEntityNotFound
+						slog.Debug("Entity not found in this backend", "id", id, "backend", currentBackendStore.GetName())
+					} else {
+						slog.Warn("Error reading from backend (will try others if available)", "id", id, "backend", currentBackendStore.GetName(), "error", readErr)
+					}
+					lastReadError = readErr
+				}
+			} // End of backend iteration loop
+
+			// Log any errors encountered during backend initialization for this specific ID's get attempt, if not already covered
+			// This is more for context if all backends failed for other reasons before even trying to read.
+			for name, err := range backendErrors {
+				slog.Warn("Note: Backend initialization failed earlier, which might affect availability.", "id", id, "failedBackendName", name, "initError", err)
+			}
+
+			if foundEntity == nil {
+				if lastReadError == nil {
+					lastReadError = fmt.Errorf("entity '%s' not found in any backend and no specific error recorded", id)
+				}
+				slog.Error("Failed to get entity from any backend or post-read processing failed", "id", id, "finalError", lastReadError)
+				fmt.Fprintf(os.Stderr, "Error getting ID %s: %v\n", id, lastReadError)
+
+				if len(idsToGet) > 1 {
+					results = append(results, SimplifiedStructuredOutput{Title: "ERROR_FETCHING_CONTENT_FOR_" + id, Body: fmt.Sprintf("Error: %v", lastReadError)})
+				}
+				continue
+			}
+
+			structuredData := SimplifiedStructuredOutput{
+				Title:       foundEntity.Title,
+				Description: foundEntity.Description,
+				Tags:        foundEntity.Tags,
+				Body:        foundEntity.Body,
+			}
+			if len(idsToGet) > 1 {
+				results = append(results, structuredData)
+			} else {
+				jsonBytes, err := json.MarshalIndent(structuredData, "", "  ")
+				if err != nil {
+					slog.Error("Failed to marshal structured data to JSON", "id", id, "error", err)
+					fmt.Fprintf(os.Stderr, "Error marshalling structured JSON for ID %s: %v\n", id, err)
+					continue
+				}
+				fmt.Fprintln(os.Stdout, string(jsonBytes))
+			}
+		} // End of id iteration loop
+
+		if len(idsToGet) > 1 && len(results) > 0 {
+			finalJsonBytes, err := json.MarshalIndent(results, "", "  ")
+			if err != nil {
+				slog.Error("Failed to marshal final structured JSON array", "error", err)
+				return fmt.Errorf("marshalling final structured JSON array: %w", err)
+			}
+			fmt.Fprintln(os.Stdout, string(finalJsonBytes))
+		}
 		return nil
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(getCmd)
-	getCmd.Flags().StringVarP(&outputFormatGet, "output", "o", "structured", "Output format (structured, json-frontmatter, yaml-frontmatter, body)")
 }

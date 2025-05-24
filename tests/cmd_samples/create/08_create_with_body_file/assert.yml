@@ -2,7 +2,7 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      Created guidance file: .gydnc/file_test.g6e
+      Created guidance file_test on default_local
       --- Content of .gydnc/file_test.g6e: ---
       ---
       title: File Test Title
@@ -13,7 +13,7 @@ stderr: []
 filesystem:
   - path: .gydnc/file_test.g6e
     exists: true
-    content_match_type: EXACT # Exact match including newlines from file
+    match_type: EXACT # Corrected from content_match_type
     content: |
       ---
       title: File Test Title

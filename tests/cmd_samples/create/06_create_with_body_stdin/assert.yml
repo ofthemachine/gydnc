@@ -2,18 +2,17 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
+      Created guidance stdin_test on default_local
       --- Content of .gydnc/stdin_test.g6e: ---
       ---
       title: Stdin Test Title
       ---
       This is body content from stdin.
-  - match_type: NOT_CONTAINS
-    content: "Created guidance file:"
 stderr: []
 filesystem:
   - path: .gydnc/stdin_test.g6e
     exists: true
-    content_match_type: EXACT
+    match_type: EXACT
     content: |
       ---
       title: Stdin Test Title

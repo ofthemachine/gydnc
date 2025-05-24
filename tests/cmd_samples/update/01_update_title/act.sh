@@ -13,17 +13,18 @@ INITIAL_DESCRIPTION="Original Description"
 INITIAL_TAGS="tag1,common"
 UPDATED_TITLE="Updated Title for 01"
 
-# Create the initial entity (quietly)
+# Create the initial entity
 ./gydnc create "${ENTITY_ALIAS}" \
   --title "${INITIAL_TITLE}" \
   --description "${INITIAL_DESCRIPTION}" \
-  --tags "${INITIAL_TAGS}" >/dev/null 2>&1 # Suppress create's own stdout/stderr
+  --tags "${INITIAL_TAGS}"
 
-# Update the entity's title (quietly)
-./gydnc update "${ENTITY_ALIAS}" --title "${UPDATED_TITLE}" >/dev/null 2>&1 # Suppress update's own stdout/stderr
+# Update the entity's title
+./gydnc update "${ENTITY_ALIAS}" --title "${UPDATED_TITLE}"
 UPDATE_EXIT_CODE=$?
 
 if [ $UPDATE_EXIT_CODE -ne 0 ]; then
+  echo "Update command failed with exit code: $UPDATE_EXIT_CODE" >&2
   exit $UPDATE_EXIT_CODE
 fi
 

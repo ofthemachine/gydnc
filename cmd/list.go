@@ -12,7 +12,6 @@ import (
 	"gydnc/core/content"
 	"gydnc/filter"
 	"gydnc/model"
-	"gydnc/service"
 	"gydnc/storage/localfs" // Added for localfs.NewStore
 
 	"github.com/spf13/cobra"
@@ -48,36 +47,46 @@ Supports tag filtering with the --filter-tags flag using syntax like:
 
 		// Get config from app context
 		cfg := appContext.Config
-		if cfg == nil || len(cfg.StorageBackends) == 0 {
-			fmt.Fprintln(os.Stderr, "active backend not initialized; run 'gydnc init' or check config")
-			os.Exit(1)
+		if len(cfg.StorageBackends) == 0 { // Simplified check
+			// slog.Error is better if slog is consistently used for logging in this cmd
+			fmt.Fprintln(os.Stderr, "No storage backends configured or configuration is empty")
+			os.Exit(1) // or return fmt.Errorf if Run func returns error
 		}
 
-		// Create a config service to help with operations
-		configService := service.NewConfigService(appContext)
+		// Create a config service to help with operations (this might be removable if GetEffectiveConfigPath is not needed)
+		// configService := service.NewConfigService(appContext) // Original line
 
-		// Get the active storage backend config
-		_, err := configService.GetActiveStorageBackend(cfg)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "active backend not initialized; run 'gydnc init' or check config")
-			os.Exit(1)
+		// Get the config path for resolving relative paths
+		var configDir string
+		if appContext.ConfigPath == "" {
+			// This should ideally not happen if initConfig correctly populates it.
+			fmt.Fprintln(os.Stderr, "Error: ConfigPath not found in appContext. Cannot resolve relative backend paths accurately.")
+			// Fallback to CWD with a strong warning.
+			wd, err := os.Getwd()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error getting current working directory: %v\n", err)
+				os.Exit(1)
+			}
+			configDir = wd
+			// Consider using slog.Warn here if slog is adopted for all cmd logging
+			fmt.Fprintf(os.Stderr, "Warning: appContext.ConfigPath is empty; using current working directory (%s) to resolve relative backend paths. This may be incorrect.\n", configDir)
+		} else {
+			absConfigPath, err := filepath.Abs(appContext.ConfigPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error getting absolute path for appContext.ConfigPath ('%s'): %v\n", appContext.ConfigPath, err)
+				os.Exit(1)
+			}
+			configDir = filepath.Dir(absConfigPath)
 		}
-		// slog.Debug("Starting 'list' command")
 
-		if !listJSON {
-			fmt.Println("Available guidance entities:")
-		}
+		// The old way of getting configPath using configService can be removed if appContext.ConfigPath is reliable.
+		// configPath, err := configService.GetEffectiveConfigPath(cfgFile) // OLD way
+		// if err != nil { ... }
+
+		foundBackends := false
 		var allEntities []model.Entity
 		foundEntities := 0
 
-		// Get the config path for resolving relative paths
-		configPath, err := configService.GetEffectiveConfigPath(cfgFile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting config path: %v\n", err)
-			os.Exit(1)
-		}
-
-		foundBackends := false // Track if we found any valid backends to query
 		for backendName, backendCfg := range cfg.StorageBackends {
 			if backendCfg.Type != "localfs" || backendCfg.LocalFS == nil {
 				// Skip non-localfs or improperly configured backends
@@ -90,19 +99,23 @@ Supports tag filtering with the --filter-tags flag using syntax like:
 			foundBackends = true
 			resolvedPath := backendCfg.LocalFS.Path
 			// If path is relative, it's relative to the config file's directory.
-			cfgDir := filepath.Dir(configPath)
+			// cfgDir := filepath.Dir(configPath) // OLD way, configPath is now appContext.ConfigPath, so configDir is already derived
 			if !filepath.IsAbs(resolvedPath) {
-				resolvedPath = filepath.Join(cfgDir, resolvedPath)
+				resolvedPath = filepath.Join(configDir, resolvedPath)
 			}
 
-			store, err := localfs.NewStore(model.LocalFSConfig{Path: resolvedPath})
+			store, err := localfs.NewStore(model.LocalFSConfig{Path: resolvedPath}, configDir)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Could not initialize backend '%s': %v\n", backendName, err)
 				continue
 			}
 
 			// Set the name in the store for proper attribution in entity listings
-			store.SetName(backendName)
+			// store.SetName(backendName) // Init should handle this if name is passed to Init
+			if err := store.Init(map[string]interface{}{"name": backendName}); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Could not initialize store name for backend '%s': %v\n", backendName, err)
+				// continue or handle error, for now, we proceed as store might still be usable without a name or with default name
+			}
 
 			// List all entities in this backend
 			aliases, err := store.List("")
@@ -180,9 +193,15 @@ Supports tag filtering with the --filter-tags flag using syntax like:
 
 		// Display the entities as JSON if requested
 		if listJSON && len(allEntities) > 0 {
-			// Sort entities by alias for consistent output
+			// Sort entities for consistent output: by Alias, then SourceBackend, then Title
 			sort.Slice(allEntities, func(i, j int) bool {
-				return allEntities[i].Alias < allEntities[j].Alias
+				if allEntities[i].Alias != allEntities[j].Alias {
+					return allEntities[i].Alias < allEntities[j].Alias
+				}
+				if allEntities[i].SourceBackend != allEntities[j].SourceBackend {
+					return allEntities[i].SourceBackend < allEntities[j].SourceBackend
+				}
+				return allEntities[i].Title < allEntities[j].Title
 			})
 
 			// Create compact or extended output

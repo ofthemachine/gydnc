@@ -1,16 +1,24 @@
-exit_code: 0
+exit_code: 1
 stdout:
-  - match_type: JSON
+  - match_type: ORDERED_LINES
     content: |
-      {
-        "title": "Updated Title for 01",
-        "description": "Original Description",
-        "tags": [
-          "common",
-          "tag1"
-        ],
-        "body": "# Original Title 01\n\nGuidance content for 'Original Title 01' goes here.\n"
-      }
-stderr: [] # If update command fails and exits, grep won't run or its stderr won't be primary.
-          # If grep fails to find the line but `|| true` is used, act.sh stdout is empty.
-          # If `gydnc update` prints to stderr, it's captured in UPDATE_STDOUT_STDERR but not asserted here if exit_code is 0.
+      Created guidance update_target_01 on primary
+stderr:
+  - match_type: SUBSTRING
+    content: "failed to discover entity 'update_target_01': entity 'update_target_01' not found in any backend"
+# Filesystem check: the file should still exist as created, since update failed before modifying it.
+filesystem:
+  - path: .gydnc/update_target_01.g6e
+    exists: true
+    match_type: EXACT
+    content: |
+      ---
+      title: Original Title 01
+      description: Original Description
+      tags:
+          - tag1
+          - common
+      ---
+      # Original Title 01
+
+      Guidance content for 'Original Title 01' goes here.

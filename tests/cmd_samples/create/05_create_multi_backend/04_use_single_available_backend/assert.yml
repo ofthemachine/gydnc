@@ -2,12 +2,13 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      Created guidance file: .the_only_store/multi_backend/single_be_test_entity.g6e
+      Notice: No DefaultBackend specified in configuration. Some commands may not function.
+      Created guidance multi_backend/single_be_test_entity on sole_backend
 stderr: []
 filesystem:
   - path: .the_only_store/multi_backend/single_be_test_entity.g6e
     exists: true
-    content_match_type: EXACT
+    match_type: EXACT
     content: |
       ---
       title: Single Backend Test

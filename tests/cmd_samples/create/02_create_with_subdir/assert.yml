@@ -2,20 +2,27 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      # REGEX: ^gydnc initialized successfully in .*/category$
-      Created guidance file: category/.gydnc/category/my-sub-guidance.g6e
-stderr: # Allow INFO logs from init and potentially create
-  - match_type: SUBSTRING
-    content: ""
+      Created guidance category/my-sub-guidance on default_local
+      --- Content of category/.gydnc/category/my-sub-guidance.g6e: ---
+      ---
+      title: my-sub-guidance
+      ---
+      # my-sub-guidance
+
+      Guidance content for 'my-sub-guidance' goes here.
+stderr: []
 filesystem:
-  - path: "category/.gydnc/category/my-sub-guidance.g6e"
+  - path: category/.gydnc/category/my-sub-guidance.g6e
     exists: true
-  - path: "category/.gydnc/category/my-sub-guidance.g6e"
-    match_type: SUBSTRING
-    content: "title: my-sub-guidance" # Title is derived from the last part of the alias
-  - path: "category/.gydnc/category/my-sub-guidance.g6e"
-    match_type: SUBSTRING
-    content: "# my-sub-guidance"
-  - path: "category/.gydnc/category/my-sub-guidance.g6e"
-    match_type: SUBSTRING
-    content: "Guidance content for 'my-sub-guidance' goes here."
+    match_type: EXACT
+    content: |
+      ---
+      title: my-sub-guidance
+      ---
+      # my-sub-guidance
+
+      Guidance content for 'my-sub-guidance' goes here.
+  - path: category/.gydnc/config.yml
+    exists: true
+  - path: category/.gydnc/tag_ontology.md
+    exists: true

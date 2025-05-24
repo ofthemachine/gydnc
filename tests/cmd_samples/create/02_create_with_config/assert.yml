@@ -2,12 +2,13 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      # REGEX: ^gydnc initialized successfully in /.*/subdir_cfg_create$
-      Created guidance file: subdir_cfg_create/.gydnc/my-cfg-guidance.g6e
-# Only assert on INFO logs and actual output, not the Notice.
-stderr:
-  - match_type: ORDERED_LINES
-    content: ""
+      Created guidance my-cfg-guidance on default_local
+
+      {
+        "title": "my-cfg-guidance",
+        "body": "# my-cfg-guidance\n\nGuidance content for 'my-cfg-guidance' goes here.\n"
+      }
+stderr: []
 filesystem:
   - path: "subdir_cfg_create/.gydnc/config.yml"
     exists: true
@@ -15,11 +16,4 @@ filesystem:
     exists: true
   - path: "subdir_cfg_create/.gydnc/my-cfg-guidance.g6e"
     exists: true
-    match_type: ORDERED_LINES
-    content: |
-      ---
-      title: my-cfg-guidance
-      ---
-      # my-cfg-guidance
-
-      Guidance content for 'my-cfg-guidance' goes here.
+    # Content verified by `gydnc get` in stdout assertions.

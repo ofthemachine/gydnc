@@ -2,12 +2,12 @@ exit_code: 0
 stdout:
   - match_type: ORDERED_LINES
     content: |
-      Created guidance file: .store_primary/multi_backend/default_be_test_entity.g6e
+      Created guidance multi_backend/default_be_test_entity on primary
 stderr: []
 filesystem:
   - path: .store_primary/multi_backend/default_be_test_entity.g6e
     exists: true
-    content_match_type: EXACT
+    match_type: EXACT
     content: |
       ---
       title: Default Backend Test

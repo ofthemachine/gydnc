@@ -7,7 +7,9 @@ stdout:
       # REGEX: ^Created tag_ontology.md: .*\.gydnc/tag_ontology.md$
       # REGEX: ^Created configuration file: .*\.gydnc/config.yml$
       # REGEX: ^gydnc initialized successfully in .*$
-      Available guidance entities:
+      # REGEX: To activate this configuration for your current session, you can run:
+      # REGEX:   export GYDNC_CONFIG=".*/\.gydnc/config.yml"
+      # REGEX: Consider adding this line to your shell configuration file \(e.g., ~/.zshrc or ~/.bashrc\) for persistent use.
         Found 1 entities in backend: default_local
 
       === Second initialization without --force (should fail) ===
@@ -17,8 +19,10 @@ stdout:
       # REGEX: ^Created tag_ontology.md: .*\.gydnc/tag_ontology.md$
       # REGEX: ^Created configuration file: .*\.gydnc/config.yml$
       # REGEX: ^gydnc initialized successfully in .*$
+      # REGEX: To activate this configuration for your current session, you can run:
+      # REGEX:   export GYDNC_CONFIG=".*/\.gydnc/config.yml"
+      # REGEX: Consider adding this line to your shell configuration file \(e.g., ~/.zshrc or ~/.bashrc\) for persistent use.
       === Verify list still works after force init ===
-      Available guidance entities:
         Found 1 entities in backend: default_local
 stderr: []
 filesystem:

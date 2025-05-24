@@ -1,0 +1,28 @@
+exit_code: 1 # list command fails due to unknown --backend flag
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      Created guidance test-entity on backend1
+
+      Created guidance test-entity on backend2
+      === Listing backend1 contents ===
+stderr:
+  - match_type: SUBSTRING
+    content: "unknown flag: --backend"
+filesystem:
+  - path: .gydnc/.gydnc/backend1/test-entity.g6e
+    exists: true # Files are created before list fails
+    match_type: EXACT
+    content: |
+      ---
+      title: Test Entity
+      ---
+      This is test content that should appear in backend1.
+  - path: .gydnc/.gydnc/backend2/test-entity.g6e
+    exists: true # Files are created before list fails
+    match_type: EXACT
+    content: |
+      ---
+      title: Test Entity
+      ---
+      This is test content that should appear in backend2.

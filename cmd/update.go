@@ -7,14 +7,13 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-
-	// "path/filepath" // Not strictly used in this iteration but often useful
-	"slices" // Go 1.21+ for slices.Contains & Sort
+	"slices" // For slices.Sort and slices.Equal
 
 	"gydnc/core/content"
 	"gydnc/model"
+	"gydnc/service" // For AppContext
 	"gydnc/storage"
-	"gydnc/storage/localfs" // Specific for localfs.NewStore
+	"gydnc/storage/localfs"
 
 	"github.com/spf13/cobra"
 	// "gopkg.in/yaml.v3" // May not be needed directly if content package handles it
@@ -31,72 +30,42 @@ var (
 // updateCmd represents the update command
 var updateCmd = &cobra.Command{
 	Use:   "update <alias>",
-	Short: "Update an existing guidance entity file (.g6e)",
-	Long: `Updates an existing .g6e guidance file's frontmatter or body.
+	Short: "Update an existing guidance entity",
+	Long: `Updates metadata or content of an existing guidance entity.
 
-<alias> specifies the entity to update, resolved via configured backends.
+The entity is identified by its alias. If the alias exists in multiple backends,
+the command will error unless a specific backend is targetable (future feature).
 
-Flags allow modification of title, description, and tags.
-The body of the guidance can be updated by piping new content via stdin.
-If no changes are detected after applying flags and new body (if any),
-the file will not be modified.`,
+Metadata fields (title, description, tags) can be updated via flags.
+If content is piped via stdin, it will replace the existing body of the guidance.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		alias := args[0]
-		// slog.Debug("Starting 'update' command", "alias", alias, "title", updateTitle, "description", updateDescription, "addTags", addTags, "removeTags", removeTags)
 
-		// Check if app context is initialized
 		if appContext == nil || appContext.Config == nil {
-			return fmt.Errorf("configuration not loaded; run 'gydnc init' or check config")
+			return fmt.Errorf("application context or configuration not initialized")
 		}
 
-		cfg := appContext.Config
-		var backend storage.Backend
-		var backendName string // To store the name of the resolved backend
-		var originalContentBytes []byte
-		var entityMetadata map[string]interface{}
-		var err error
-		var actualPath string
-
-		// Try active backend first
-		activeBkend, activeBkendName := GetActiveBackend() // Ensure this line correctly unpacks two values
-		if activeBkend != nil {
-			originalContentBytes, entityMetadata, err = activeBkend.Read(alias)
-			if err == nil {
-				val, ok := entityMetadata["path"]
-				if ok && val != nil {
-					actualPath, ok = val.(string)
-					if ok {
-						backend = activeBkend
-						backendName = activeBkendName // Store name from active backend
-					}
-				}
-			}
+		// Discover the entity across backends using the appContext
+		backend, actualPath, backendName, err := discoverEntityAcrossBackends(appContext, alias) // Pass appContext
+		if err != nil {
+			return fmt.Errorf("failed to discover entity '%s': %w", alias, err)
 		}
 
-		// If not found via active backend, or active backend is nil, or path was not in metadata
 		if backend == nil {
-			// discoverEntityAcrossBackends now returns backend name as 3rd string value
-			discoveredBackend, discoveredPath, discoveredBackendNameVal, discoverErr := discoverEntityAcrossBackends(cfg, alias)
-			if discoverErr != nil {
-				return fmt.Errorf("failed to find entity '%s' in any backend: %w", alias, discoverErr)
-			}
-			backend = discoveredBackend
-			actualPath = discoveredPath
-			backendName = discoveredBackendNameVal // Keep this assignment
+			return fmt.Errorf("entity '%s' not found or backend could not be determined", alias)
+		}
 
-			// Read the content again using the discovered backend and path
-			// discoverEntityAcrossBackends only checks for existence and gets metadata like path, not full content.
-			// entityMetadata is not used in this branch, so assign to _ to avoid ineffectual assignment.
-			originalContentBytes, _, err = backend.Read(actualPath)
-			if err != nil {
-				return fmt.Errorf("failed to read entity from discovered path '%s' from backend '%s': %w", actualPath, backendName, err)
-			}
+		slog.Debug("Found entity for update", "alias", alias, "backendName", backendName, "pathInBackend", actualPath)
+
+		originalContentBytes, entityMetadata, err := backend.Read(actualPath) // actualPath is the alias for localfs
+		if err != nil {
+			return fmt.Errorf("failed to read entity '%s' from backend '%s': %w", alias, backendName, err)
 		}
 
 		parsedContent, err := content.ParseG6E(originalContentBytes)
 		if err != nil {
-			return fmt.Errorf("failed to parse existing content for '%s' ('%s'): %w", alias, actualPath, err)
+			return fmt.Errorf("failed to parse G6E content for '%s' ('%s'): %w", alias, actualPath, err)
 		}
 
 		entity := model.Entity{
@@ -130,17 +99,12 @@ the file will not be modified.`,
 			}
 		}
 
-		// Tags processing
-		// originalForTagComparison.Tags contains tags as read from the file (original order).
-		// parsedContent.Tags also currently holds these original tags.
-
 		prospectiveTags := make([]string, len(parsedContent.Tags))
-		copy(prospectiveTags, parsedContent.Tags) // Start with a copy of current tags from parsedContent
+		copy(prospectiveTags, parsedContent.Tags)
 
 		if cmd.Flags().Changed("add-tag") || cmd.Flags().Changed("remove-tag") {
-			// If tag modification flags are used, rebuild the list from a set
 			tagsSet := make(map[string]struct{})
-			for _, tag := range prospectiveTags { // Use the current list before modifications
+			for _, tag := range prospectiveTags {
 				tagsSet[tag] = struct{}{}
 			}
 			for _, tagToRemove := range removeTags {
@@ -155,12 +119,8 @@ the file will not be modified.`,
 			}
 		}
 
-		// Always sort the prospectiveTags list (either newly built or the original list)
 		slices.Sort(prospectiveTags)
 
-		// Compare the sorted prospective tags with the original tags (as read from file, unsorted)
-		// If they are different (either because content changed or because sorting changed the order),
-		// then the content is considered modified.
 		if !slices.Equal(prospectiveTags, originalForTagComparison.Tags) {
 			contentModified = true
 		}
@@ -181,7 +141,7 @@ the file will not be modified.`,
 			}
 			newBodyBytes = bodyBuilder.Bytes()
 			if len(newBodyBytes) > 0 && newBodyBytes[len(newBodyBytes)-1] == '\n' {
-				newBodyBytes = newBodyBytes[:len(newBodyBytes)-1] // Trim trailing newline from stdin read
+				newBodyBytes = newBodyBytes[:len(newBodyBytes)-1]
 			}
 
 			if string(newBodyBytes) != entity.Body {
@@ -206,20 +166,15 @@ the file will not be modified.`,
 			return nil
 		}
 
-		// The `id` for Write for LocalFSBackend is the path relative to its root.
-		// `actualPath` from `entityMetadata["path"]` should be this.
 		err = backend.Write(actualPath, updatedContentBytes, nil)
 		if err != nil {
 			return fmt.Errorf("failed to write updated entity '%s' ('%s') to backend '%s': %w", alias, actualPath, backendName, err)
 		}
 
-		// Construct display path using GetBasePath if available
-		displayPath := alias + ".g6e" // Fallback to alias.g6e
+		displayPath := alias + ".g6e"
 		if backend != nil {
-			// Diagnostic: Try direct type assertion for localfs.Store
 			if lsStore, ok := backend.(*localfs.Store); ok {
-				// slog.Debug("Backend is localfs.Store, getting base path directly")
-				bp := lsStore.GetBasePath() // Call on concrete type
+				bp := lsStore.GetBasePath()
 				if bp != "" {
 					displayPath = filepath.Join(bp, alias+".g6e")
 				}
@@ -227,7 +182,6 @@ the file will not be modified.`,
 		}
 
 		slog.Debug("Updated guidance file", "path", displayPath)
-		// slog.Info("Successfully updated guidance file", "path", displayPath)
 		return nil
 	},
 }
@@ -236,12 +190,27 @@ the file will not be modified.`,
 // It is given an alias and attempts to read it from each backend.
 // Returns the backend instance, the path relative to the backend (which is the alias itself for localfs),
 // the backend's name, and an error if not found.
-func discoverEntityAcrossBackends(cfg *model.Config, alias string) (storage.Backend, string, string, error) {
+func discoverEntityAcrossBackends(appCtx *service.AppContext, alias string) (storage.Backend, string, string, error) {
 	var lastError error
 	var foundBackends []string
 	var foundBackend storage.Backend
 	var foundPath string
 	var foundBackendName string
+
+	if appCtx == nil || appCtx.Config == nil {
+		return nil, "", "", fmt.Errorf("appContext or its Config is nil in discoverEntityAcrossBackends")
+	}
+	cfg := appCtx.Config
+
+	configDir := ""
+	if appCtx.ConfigPath != "" {
+		configDir = filepath.Dir(appCtx.ConfigPath)
+	} else {
+		// If ConfigPath is empty, behavior for relative paths is undefined or defaults to CWD for localfs.NewStore.
+		// This case should ideally be prevented by initConfig setting ConfigPath.
+		slog.Warn("appContext.ConfigPath is empty in discoverEntityAcrossBackends; relative backend paths may not resolve as expected.")
+		// localfs.NewStore will use CWD if configDir is "" and path is relative.
+	}
 
 	for name, backendConfig := range cfg.StorageBackends {
 		if backendConfig.Type != "localfs" {
@@ -250,24 +219,22 @@ func discoverEntityAcrossBackends(cfg *model.Config, alias string) (storage.Back
 		if backendConfig.LocalFS == nil || backendConfig.LocalFS.Path == "" {
 			continue
 		}
-		tempStore, err := localfs.NewStore(*backendConfig.LocalFS)
+		// Pass configDir to localfs.NewStore
+		tempStore, err := localfs.NewStore(*backendConfig.LocalFS, configDir)
 		if err != nil {
-			lastError = fmt.Errorf("failed to init temp store for backend %s: %w", name, err)
+			lastError = fmt.Errorf("failed to init temp store for backend %s (path: %s, configDir: %s): %w", name, backendConfig.LocalFS.Path, configDir, err)
 			continue
 		}
-		if initErr := tempStore.Init(nil); initErr != nil {
+		if initErr := tempStore.Init(map[string]interface{}{"name": name}); initErr != nil {
 			lastError = fmt.Errorf("failed to initialize temp store for backend %s: %w", name, initErr)
 			continue
 		}
-		tempStore.SetName(name)
+		// tempStore.SetName(name) // Init now handles setting the name
 
-		// Read directly from the temp store; if found, store the match
 		_, stats, readErr := tempStore.Read(alias)
 		if readErr == nil && stats != nil {
-			// Successfully found the entity in this backend
 			foundBackends = append(foundBackends, name)
 			if foundBackend == nil {
-				// Store the first match
 				foundBackend = tempStore
 				foundPath = alias
 				foundBackendName = name
@@ -275,18 +242,14 @@ func discoverEntityAcrossBackends(cfg *model.Config, alias string) (storage.Back
 		}
 	}
 
-	// Check if entity was found in multiple backends
 	if len(foundBackends) > 1 {
 		return nil, "", "", fmt.Errorf("entity '%s' found in multiple backends (%v); please specify which backend to update or ensure the entity exists in only one backend", alias, foundBackends)
 	}
 
-	// If we found exactly one, return it
 	if len(foundBackends) == 1 {
 		return foundBackend, foundPath, foundBackendName, nil
 	}
 
-	// If we get here, the entity was not found in any backend.
-	// Return the last error observed during discovery, or a generic not found error.
 	if lastError != nil {
 		return nil, "", "", lastError
 	}

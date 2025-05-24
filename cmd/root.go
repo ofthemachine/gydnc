@@ -41,7 +41,11 @@ It aids in creating and maintaining documentation tailored to agent behavior and
 			return
 		}
 		// If no version flag and no subcommand, show help
-		cmd.Help()
+		if err := cmd.Help(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error displaying help: %v\n", err)
+			// Decide if this should cause an exit. Typically, failing to show help might.
+			os.Exit(1)
+		}
 	},
 }
 
@@ -110,6 +114,7 @@ func initConfig() {
 
 	// Update the app context with the loaded config
 	appContext.Config = config
+	appContext.ConfigPath = configPath // Store the loaded config path in appContext
 
 	// Initialize the active backend
 	if err := InitActiveBackend(); err != nil {

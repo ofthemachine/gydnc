@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e # Exit on first error
 
-# Initialize gydnc in the current directory
-./gydnc init .
+# Initialize gydnc in the current directory, suppress output
+./gydnc init . > /dev/null 2>&1
 
 # Set config for all commands after init
 export GYDNC_CONFIG=.gydnc/config.yml
