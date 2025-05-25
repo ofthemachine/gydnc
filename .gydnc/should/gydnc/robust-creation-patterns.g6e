@@ -1,0 +1,67 @@
+---
+title: Robust Gydnc Creation Patterns
+description: Emphasizes file-based methods (cat file | gydnc create or --body-from-file) for creating gydnc entries, detailing preferred and discouraged patterns.
+tags:
+    - type:recommendation
+    - tool:gydnc
+    - scope:development
+    - pattern:creation
+---
+# Robust Gydnc Creation Patterns
+
+**Recommendation:** Prioritize file-based methods for creating `gydnc` entries to ensure maximum robustness and avoid common pitfalls with command-line string escaping or parsing, especially when content is multi-lined or complex.
+
+## Most Preferred Methods:
+
+1.  **`cat <file> | gydnc create <alias> [flags...]`**:
+    *   Create your full guidance content (body and optional YAML frontmatter for metadata) in a dedicated `.md` file.
+    *   Pipe this file directly into `gydnc create`.
+    *   This is the cleanest and most reliable approach for all content types.
+    *   Example:
+        ```bash
+        # content.md:
+        # ---
+        # title: My Awesome Guidance
+        # tags:
+        #  - scope:example
+        # ---
+        # This is the main body.
+
+        cat content.md | gydnc create examples/my-guidance --description "Set via flag"
+        ```
+
+2.  **`gydnc create <alias> --body-from-file <filepath> [flags...]`**:
+    *   Place only the body of your guidance into a file.
+    *   Use the `--body-from-file` flag to specify this file.
+    *   Provide all metadata (title, tags, description) via command-line flags.
+    *   This is a good alternative if you prefer to keep metadata separate from the body content file.
+    *   Example:
+        ```bash
+        # body_only.md:
+        # This is the main body content.
+        # It can be multi-line.
+
+        gydnc create examples/another-guidance \
+          --title "Another Example" \
+          --tags "type:recommendation" \
+          --description "Using body-from-file" \
+          --body-from-file body_only.md
+        ```
+
+## Less Preferred (Use with Caution):
+
+*   **Here-document (`cat << 'EOF' | gydnc create ...`)**:
+    *   Suitable for very simple, short, inline content where the risk of quoting or escaping errors is minimal.
+    *   Can become error-prone for complex content or when the command is constructed programmatically (e.g., by an AI agent), as subtle mistakes in escaping the overall command string can corrupt the heredoc content.
+    *   **If in doubt, or if content has multiple lines/special characters, default to file-based methods.**
+
+*   **`--body` flag**:
+    *   **Strongly discouraged for multi-line content.**
+    *   Only for trivial, single-line, plain text body content.
+    *   Highly susceptible to errors with newlines, quotes, and special characters.
+
+**Rationale:**
+
+File-based approaches (piping from `cat` or using `--body-from-file`) decouple the content from the command string itself. This avoids the complexities and potential errors associated with shell parsing and escaping of multi-line strings or strings containing special characters embedded directly within a command. They are inherently more robust and easier to debug.
+
+This aligns with `gydnc/meta/guidance-management-best-practices`.

@@ -1,0 +1,103 @@
+---
+title: Correcting Broken Integration Tests
+description: Step-by-step process for fixing integration tests when the test assertions are incorrect, not the application code.
+tags:
+    - domain:testing
+    - phase:maintenance
+    - scope:core
+    - type:recipe
+---
+# How to Correct a Broken Integration Test
+
+When an integration test fails, and you suspect the test's assertions (`assert.yml`) are outdated or incorrect rather than the application code being broken, follow this procedure to update the test accurately.
+
+## 1. Prioritize `test-session` for Debugging
+
+The **most effective way** to diagnose and capture output for a failing integration test is using the `test-session` Makefile target. This provides a dedicated, isolated environment for the specific test.
+
+```bash
+make test-session DIR=path/to/your/test_case
+```
+
+- **Observe Output**: The `test-session` will typically execute the test's `act.sh` script. Carefully observe the `stdout` and `stderr` produced.
+- **Navigate and Explore**: The session will print the path to a temporary directory (e.g., `/tmp/tmp.XXXXXXXX`). `cd` into this directory in another terminal. You can inspect the `act.sh`, `assert.yml`, any generated files, and manually re-run `./act.sh` to experiment. Redirect output if needed: `./act.sh > stdout.log 2> stderr.log`.
+
+If `test-session` is not available for a particular test or setup, you can fall back to manually running `act.sh` from within the test's directory (e.g., `tests/cmd_samples/path/to/your/test_case`) and redirecting its output:
+
+```bash
+# Fallback if test-session is not suitable
+cd tests/cmd_samples/path/to/your/test_case
+./act.sh > act_stdout.log 2> act_stderr.log
+```
+
+## 2. Capture Actual `stdout` and `stderr`
+
+From the output of the test run (ideally from `test-session`, or the `.log` files if manually redirected), carefully copy the complete standard output and standard error streams.
+
+- **`stdout`**: This is the primary output of the command(s) run by `act.sh`.
+- **`stderr`**: This includes log messages (INFO, WARN, ERROR, DEBUG) and any direct error prints from the application.
+
+## 3. Analyze Discrepancies with `assert.yml`
+
+Open the `assert.yml` file for the failing test.
+Compare the captured `stdout` and `stderr` with the assertions defined in the `assert.yml` file.
+
+Identify specific differences:
+- **Content Mismatches**: Are strings, JSON structures, or regex patterns different?
+- **Order Mismatches**: For `ORDERED_LINES`, is the sequence of output different?
+- **Count Mismatches**: For checks that implicitly count lines or items.
+- **Missing/Extra Output**: Is there output in `stdout` or `stderr` that the assertion doesn't account for, or vice-versa?
+- **Log Level / Format Changes**: If logging was changed (e.g., messages moved from stdout to stderr, log levels changed, or log formats updated), this will be a common source of discrepancy.
+
+## 4. Update `assert.yml` Based on Actual Output
+
+Modify the `assert.yml` file to match the actual, correct output observed in Step 2.
+
+- **For `stdout` and `stderr` checks:**
+  - **`EXACT`**: Use if the entire output stream must match character for character. Paste the exact captured output. Ensure no trailing/leading whitespace differences.
+  - **`ORDERED_LINES`**: Use if the sequence of lines matters. Each line can be an exact string or a `# REGEX: pattern`. Useful for multi-line outputs where overall sequence is key.
+  - **`JSON`**: Use if the output is JSON. Ensure the structure and values match. The test harness typically validates JSON structure and allows for flexible key order at the same level.
+  - **`SUBSTRING`**: Use to check for the presence of a specific piece of text anywhere in the stream. Good for checking for key error messages or log lines when the full output is too verbose or variable.
+  - **`REGEX`**: Use for complex pattern matching or when parts of the output are variable (e.g., timestamps, absolute paths, variable parts of log messages). **Use sparingly** as per project guidelines; prefer simpler match types if possible.
+
+- **Ensure correct `match_type`** is used for each assertion.
+- **Update `exit_code`** if the command's success/failure status has legitimately changed.
+- **Update `filesystem` checks** if the test creates/modifies files and those expectations have changed (e.g., file paths, content, existence).
+
+**Example of adapting to a log format change:**
+
+*Old `stderr` assertion (before logging changes):*
+```yaml
+stderr:
+  - match_type: EXACT
+    content: "Successfully created entity X"
+```
+
+*Captured `stderr` (after logging changes, e.g., `slog` output `level=INFO msg="Successfully created entity X" alias=X backend=default`):*
+```
+level=INFO msg="Successfully created entity X" alias=X backend=default
+```
+
+*New `stderr` assertion (using REGEX for flexibility, if absolutely needed):*
+```yaml
+stderr:
+  - match_type: REGEX # Or SUBSTRING if parts are sufficient
+    content: |
+      ^level=INFO msg="Successfully created entity X"(.*alias=X.*backend=default.*|.*backend=default.*alias=X.*)$
+```
+(This regex handles potential attribute order variations in structured logs).
+
+## 5. Re-run the Test
+
+After updating `assert.yml`, re-run the individual test to confirm it now passes.
+
+```bash
+# From the main project directory:
+make test-integration DIR=path/to/your/test_case
+```
+
+## 6. Commit Changes
+
+Once the test passes and you are confident the assertions accurately reflect the intended behavior, commit the updated `assert.yml` file (and any necessary changes to `act.sh` if paths or commands were also incorrect).
+
+By following this process, you ensure that test assertions are kept in sync with the application's actual and correct behavior, making the test suite a reliable indicator of health.

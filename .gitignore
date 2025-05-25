@@ -22,7 +22,7 @@ go.work
 go.work.sum
 
 # Local binary
-gydnc
+/gydnc
 
 # Volatile file
 cmd/version.txt

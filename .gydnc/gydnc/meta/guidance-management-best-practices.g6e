@@ -1,0 +1,121 @@
+---
+title: Guidance Management Best Practices for gydnc
+description: Definitive guide on creating and updating gydnc entries, emphasizing robust multi-line content handling.
+tags:
+    - scope:meta
+    - tool:gydnc
+    - type:howto
+---
+# Guidance Management Best Practices for gydnc
+
+This document outlines the best practices for creating and updating guidance entries using the `gydnc` CLI tool, particularly for multi-line content.
+
+## Preferred Patterns for Content Creation/Update
+
+When creating or updating guidance, especially for entries involving multi-line content (which is common), the **most robust and strongly recommended methods** are to pipe content from `cat` using a temporary file, or to use the `--body-from-file` flag. These ensure proper handling of special characters, newlines, and code blocks, minimizing errors.
+
+### 1. Temporary File Pattern (Most Robust for All Content)
+
+This is the **most reliable method** for all types of content, especially extensive, complex, or externally generated guidance.
+
+**Steps:**
+1.  Write your complete guidance content (including frontmatter if desired, though `gydnc create` flags can also set/override frontmatter) to a temporary markdown file (e.g., `temp_guidance.md`).
+2.  Pipe this file into the `gydnc` command.
+
+**Creation:**
+```bash
+# Example: temp_guidance.md contains the full content
+# ---
+# title: My Guidance from File
+# tags:
+#   - example
+# ---
+# This is content from a file.
+
+cat temp_guidance.md | gydnc create <alias_from_file> --title "Override Title" --tags "type:filebased"
+```
+
+**Update:**
+```bash
+# Example: updated_content.md contains the new body
+cat updated_content.md | gydnc update <alias_to_update>
+```
+
+**Key advantages of temp files:**
+- **Highest Reliability:** Avoids complex shell escaping and command string parsing issues.
+- Excellent for very long or complex content.
+- Easy to integrate with other tools or scripts that generate markdown.
+- Keeps your main script cleaner.
+
+### 2. Body-from-File Flag (Equally Robust Alternative)
+
+The `--body-from-file` flag offers similar robustness to the temporary file pattern by reading directly from a file.
+
+**Creation:**
+```bash
+# Example: content_body.md contains only the body of the guidance.
+# Metadata is provided by flags.
+gydnc create <alias_body_file> \
+  --title "Guidance via Body File" \
+  --description "Content sourced using --body-from-file" \
+  --tags "type:howto,tech:cli" \
+  --body-from-file content_body.md
+```
+*(Note: Check your `gydnc` version for `--body-from-file` availability and exact behavior regarding frontmatter in the file vs. command-line flags.)*
+
+### 3. Here-Document Pattern (for Simpler, Inline Content)
+
+This method is suitable for *simpler, inline content* when scripting the creation or update directly within a shell script or command line. However, it can be more error-prone for complex scenarios, especially when an AI agent constructs the command, due to potential escaping or parsing issues with the command string itself.
+
+**Creation:**
+```bash
+cat << 'EOF' | gydnc create <alias> --title "My New Guidance" --tags "type:howto,scope:general"
+# Your Guidance Title (can also be in frontmatter)
+
+This is the main body of your guidance.
+It can span multiple lines.
+
+Code blocks like this are preserved:
+  function example() {
+    echo "Hello World"
+  }
+
+EOF
+```
+
+**Update:**
+```bash
+cat << 'EOF' | gydnc update <alias>
+# Updated Guidance Title
+
+This is the new body content.
+All previous body content will be overwritten.
+EOF
+```
+
+**Key advantages of here-documents:**
+- Handles multi-line input.
+- Preserves indentation and special characters (when using the non-expanding `'EOF'` form).
+- Good for moderately sized, straightforward content.
+**Considerations:**
+- Can become unwieldy for very long content.
+- Higher risk of subtle errors if command construction involves complex quoting or variable expansion, especially for automated agents. **Prefer file-based methods for maximum robustness.**
+
+## Avoid or Use with Caution
+
+- ⚠️ **`--body` flag:** This flag is designed for very short, single-line strings. **NEVER use `--body` for multi-line content.** It does not handle newlines or complex formatting well and can lead to broken or unreadable guidance. It is considered an error-prone alternative for anything beyond trivial, single-line text.
+
+## Metadata Management (during Creation)
+
+When using `gydnc create`, always strive to include comprehensive metadata using the available flags (or via frontmatter in your piped content):
+
+```bash
+gydnc create <alias> \
+  --title "A Clear and Descriptive Title" \
+  --description "A brief summary of what this guidance helps with." \
+  --tags "type:recipe,scope:core,domain:testing,status:draft"
+```
+
+Note: The `gydnc update` command primarily replaces the body content. To update metadata like title or tags, you typically re-pipe the full content with updated frontmatter, or use specific flags if available in your `gydnc` version for metadata updates. For simplicity and consistency, managing metadata predominantly through the creation process or by updating the entire content (including frontmatter) is recommended.
+
+Refer to the main `gydnc` interaction framework for a complete list of commands and core principles for all `gydnc` operations.

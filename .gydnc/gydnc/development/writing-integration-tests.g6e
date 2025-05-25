@@ -1,0 +1,310 @@
+---
+title: Writing gydnc Integration Tests
+description: Comprehensive guide for writing effective integration tests for the gydnc CLI tool, including all available matchers, best practices, and common patterns
+tags:
+    - tech:testing
+    - quality:testing
+    - process:development
+    - tools:makefile
+    - lang:yaml
+    - lang:bash
+---
+# Writing gydnc Integration Tests
+
+## Purpose
+This guidance provides comprehensive instructions for writing effective integration tests for the gydnc CLI tool, including all available matchers and best practices.
+
+## Test Structure Overview
+
+Integration tests in gydnc follow a structured format with three main components:
+
+1. **`act.sh`** - The executable script that runs the test scenario
+2. **`assert.yml`** - Defines expected outcomes and assertions
+3. **`arrange.yml`** (optional) - Sets up test fixtures and data
+
+## Test Directory Structure
+
+```
+tests/cmd_samples/
+├── <command>/
+│   └── <test_scenario>/
+│       ├── act.sh          # Required: test execution script
+│       ├── assert.yml      # Required: test assertions
+│       └── arrange.yml     # Optional: test setup
+```
+
+## Available Assertion Matchers
+
+### stdout/stderr Stream Matchers
+
+#### 1. EXACT (default)
+Performs exact string matching after trimming whitespace:
+```yaml
+stdout:
+  - match_type: EXACT
+    content: |
+      Expected exact output
+      Line by line match
+```
+
+#### 2. SUBSTRING
+Checks if content appears anywhere in the output:
+```yaml
+stdout:
+  - match_type: SUBSTRING
+    content: "Must appear somewhere in output"
+```
+
+#### 3. REGEX
+Uses regex pattern matching:
+```yaml
+stdout:
+  - match_type: REGEX
+    content: "^Created guidance store: .*\.gydnc$"
+```
+
+#### 4. ORDERED_LINES (Recommended)
+Checks that lines appear in the specified order, with regex support:
+```yaml
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      === First section ===
+      # REGEX: ^Created guidance store: .*\.gydnc$
+      # REGEX: ^gydnc initialized successfully in .*$
+      Fixed text line
+      === Second section ===
+```
+**Best Practice:** Use ORDERED_LINES with regex patterns for dynamic content (paths, timestamps, etc.)
+
+#### 5. UNORDERED_LINES
+Checks that all specified lines appear, regardless of order:
+```yaml
+stdout:
+  - match_type: UNORDERED_LINES
+    content: |
+      Line that can appear anywhere
+      Another line in any order
+```
+
+#### 6. JSON
+Performs deep equality comparison of JSON content:
+```yaml
+stdout:
+  - match_type: JSON
+    content: |
+      {
+        "status": "success",
+        "count": 3
+      }
+```
+
+#### 7. YAML
+Performs deep equality comparison of YAML content:
+```yaml
+stdout:
+  - match_type: YAML
+    content: |
+      title: Test Entity
+      tags: [test, example]
+```
+
+#### 8. PARTIAL_YAML
+Checks that expected YAML keys/values are present (subset match):
+```yaml
+stdout:
+  - match_type: PARTIAL_YAML
+    content: |
+      title: Test Entity
+      # Other keys in actual output are ignored
+```
+
+#### 9. GOLDEN
+Compares output to content from a golden file:
+```yaml
+stdout:
+  - match_type: GOLDEN
+    content: "path/to/golden/file.txt"
+```
+
+### Filesystem Assertions
+
+Check file and directory existence, properties, and content:
+
+```yaml
+filesystem:
+  - path: ".gydnc"
+    exists: true
+    is_dir: true
+  - path: ".gydnc/config.yml"
+    exists: true
+    match_type: YAML
+    content: |
+      backends:
+        default_local:
+          type: localfs
+  - path: "should_not_exist.txt"
+    exists: false
+```
+
+## Best Practices
+
+### 1. Prefer Exact Matches for Stable Output
+If the expected output for a test (or parts of it) is completely static and known, use `EXACT` or `ORDERED_LINES` without the `# REGEX:` prefix. This makes tests more precise and easier to understand. Reserve `REGEX` for parts of the output that are genuinely dynamic (e.g., timestamps, generated IDs, full paths).
+
+### 2. Use ORDERED_LINES for Most Cases
+ORDERED_LINES is the most flexible matcher:
+- Combines exact matching for stable content
+- Uses regex for dynamic content (paths, IDs, timestamps)
+- Maintains logical order verification
+- More readable than multiple SUBSTRING checks
+For lines with entirely static content, omit the `# REGEX:` prefix.
+
+### 3. Regex Patterns in ORDERED_LINES
+Use the `# REGEX:` prefix *only* for lines containing dynamic content. For completely static lines within an `ORDERED_LINES` block, no prefix is needed.
+```yaml
+content: |
+  === Fixed header ===
+  This line is an exact match.
+  # REGEX: ^Created guidance store: .*\.gydnc$
+  # REGEX: ^gydnc initialized successfully in .*$
+  Another fixed success message.
+```
+
+### 4. Error Testing Patterns
+For testing error conditions:
+```yaml
+exit_code: 1
+stderr:
+  - match_type: SUBSTRING
+    content: "Error: configuration already exists"
+```
+
+### 5. File Content Verification
+When checking file contents, prefer exact matching for templates:
+```yaml
+filesystem:
+  - path: ".gydnc/generated_file.yml"
+    exists: true
+    match_type: EXACT
+    content: |
+      ---
+      title: Expected Title
+      ---
+      Expected content
+```
+
+### 6. Multi-Phase Testing
+Structure complex tests with clear phases:
+```bash
+#!/bin/bash
+set -euo pipefail
+
+echo "=== Phase 1: Initial setup ==="
+./gydnc init
+
+echo "=== Phase 2: Test main functionality ==="
+./gydnc create test-entity
+
+echo "=== Phase 3: Verify results ==="
+./gydnc list
+```
+
+### 7. Environment Isolation
+Ensure tests are independent:
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# Clean environment
+unset GYDNC_CONFIG
+
+# Use local config
+export GYDNC_CONFIG="$(pwd)/.gydnc/config.yml"
+```
+
+## Running Specific Tests
+
+Use the correct `DIR` parameter for filtering:
+```bash
+# Run a specific test
+make test-integration DIR=cmd_samples/init/03_init_with_force
+
+# Run all tests in a command category
+make test-integration DIR=cmd_samples/create
+
+# Run all tests (no DIR parameter)
+make test-integration
+```
+
+## Common Patterns
+
+### Success Operation Testing
+```yaml
+exit_code: 0
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      # REGEX: ^Created guidance file: .*\.g6e$
+      Success message
+filesystem:
+  - path: ".gydnc/created_file.g6e"
+    exists: true
+```
+
+### Error Condition Testing
+```yaml
+exit_code: 1
+stderr:
+  - match_type: SUBSTRING
+    content: "Error: specific error message"
+filesystem:
+  - path: "file_that_should_not_exist"
+    exists: false
+```
+
+### Multi-Backend Testing
+```yaml
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      Available guidance entities:
+      # REGEX: ^\s*Found \d+ entities in backend: backend1$
+      # REGEX: ^\s*Found \d+ entities in backend: backend2$
+```
+
+## Debugging Test Failures
+
+1. **Check exact output format:** Use `make dump-test-output` if available
+2. **Verify file paths:** Ensure filesystem assertions use correct relative paths
+3. **Escape regex properly:** Use `\.` for literal dots, `\$` for literal dollar signs
+4. **Check line endings:** Ensure consistent line ending handling
+
+## Example Complete Test
+
+```yaml
+# assert.yml
+exit_code: 0
+stdout:
+  - match_type: ORDERED_LINES
+    content: |
+      === Initialization ===
+      # REGEX: ^Created guidance store: .*\.gydnc$
+      # REGEX: ^gydnc initialized successfully in .*$
+      Available guidance entities:
+        Found 0 entities in backend: default_local
+stderr: []
+filesystem:
+  - path: ".gydnc"
+    exists: true
+    is_dir: true
+  - path: ".gydnc/config.yml"
+    exists: true
+    match_type: PARTIAL_YAML
+    content: |
+      backends:
+        default_local:
+          type: localfs
+```
+
+This guidance provides a comprehensive foundation for writing robust and maintainable gydnc integration tests.

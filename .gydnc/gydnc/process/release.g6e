@@ -1,0 +1,71 @@
+---
+title: gydnc Release Process Guide
+description: Complete workflow for releasing gydnc CLI from the root directory with automated builds and professional release notes
+tags:
+    - type:process
+    - scope:release
+    - repo:gydnc
+    - tech:git
+    - tech:github-actions
+    - target:maintainer
+    - quality:high
+---
+
+# 🚀 gydnc Release Process Guide
+
+## ⚠️ CRITICAL: Root Directory Context
+
+**ALL OPERATIONS MUST BE PERFORMED FROM THE PROJECT ROOT DIRECTORY**
+
+This release process is specifically designed for the gydnc project located at the repository root. The GitHub Actions, file paths, and commands assume you are working within the root project structure.
+
+```bash
+# ALWAYS ensure you are in the correct directory first
+cd /path/to/your/gydnc/repo/
+pwd  # Should show: .../gydnc (project root)
+```
+
+## 🎯 Overview
+
+This guidance covers the complete workflow for releasing gydnc CLI, from analyzing changes to triggering the GitHub Actions release pipeline. The process emphasizes security, transparency, and beautiful presentation while operating from the project root directory.
+
+**Important Note on Shell Commands:** When executing shell commands, especially those involving variable assignments or complex pipelines, it's best to run each logical command on a separate line. Avoid chaining multiple distinct operations (e.g., an assignment followed by an echo) on the same line if they can be separated.
+
+## 📋 Release Workflow
+
+### 1. Pre-Release Analysis (Root Directory Context)
+
+**Navigate to Project Root**
+```bash
+# MANDATORY: Work from project root directory
+cd /path/to/your/gydnc/repo/
+pwd  # Verify you're in the project root
+```
+
+**Discover Previous Release**
+```bash
+# Find the latest release version in releases/
+# Ensure this command is run on its own line to correctly capture the variable
+PREVIOUS_RELEASE=$(find releases/ -name "v*.md" | sort | tail -1 | xargs basename | sed 's/\.md$//')
+
+# Echo the variable on a separate line to verify
+echo "Previous gydnc release: $PREVIOUS_RELEASE"
+```
+
+**Analyze Changes Since Last Release**
+```bash
+# Find the commit that added the previous release file
+# Ensure this command is run on its own line
+RELEASE_COMMIT=$(git log --format=%H -n 1 -- "releases/${PREVIOUS_RELEASE}.md")
+
+# Echo the variable on a separate line to verify
+echo "Release commit: $RELEASE_COMMIT"
+
+# Get commits since last release
+git log --oneline ${RELEASE_COMMIT}..HEAD
+
+# Detailed analysis with commit details
+git log --format="%h|%s|%an|%ad" --date=short ${RELEASE_COMMIT}..HEAD
+```
+// ... existing code ...
+

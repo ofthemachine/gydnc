@@ -1,0 +1,134 @@
+---
+title: Running Specific gydnc Integration Tests
+description: How to run individual integration tests for the gydnc CLI using the correct directory filtering approach
+tags:
+    - tech:testing
+    - tech:makefile
+    - repo:gydnc
+    - process:workflow
+    - quality:testing
+---
+# Running Specific gydnc Integration Tests
+
+## Purpose
+This recipe provides the correct approach for running individual integration tests in the gydnc CLI tool, avoiding the common mistake of using incorrect filtering parameters.
+
+## Background
+The gydnc integration test suite supports filtering tests by directory path using the `DIR` parameter, not `FILTER`. This allows developers to run specific tests during development without executing the entire test suite.
+
+## Prerequisites
+- Working gydnc development environment
+- Integration tests available in `gydnc/tests/cmd_samples/`
+- Make and Go installed
+
+## Steps
+
+### 1. Locate the Test Directory
+Integration tests are organized under `gydnc/tests/cmd_samples/` with hierarchical paths:
+```bash
+# Example test paths:
+# cmd_samples/init/03_init_with_force
+# cmd_samples/create/01_create_simple
+# cmd_samples/list/02_list_multi_backend_json
+```
+
+### 2. Run a Specific Test
+Use the `DIR` parameter with `make test-integration`:
+```bash
+# Run a specific test by its directory path
+make test-integration DIR=cmd_samples/init/03_init_with_force
+
+# Run all tests in a category
+make test-integration DIR=cmd_samples/init
+
+# Run all tests in the create category
+make test-integration DIR=cmd_samples/create
+```
+
+### 3. Run All Integration Tests
+To run the complete test suite:
+```bash
+# Run all integration tests
+make test-integration
+```
+
+## Common Mistakes
+
+### ❌ Incorrect: Using FILTER Parameter
+```bash
+# This will NOT work as expected - runs all tests
+make test-integration FILTER=init/03_init_with_force
+```
+
+### ✅ Correct: Using DIR Parameter
+```bash
+# This correctly runs only the specific test
+make test-integration DIR=cmd_samples/init/03_init_with_force
+```
+
+## Understanding Test Output
+
+### Successful Test Run
+```
+Running integration tests...
+Filtering integration tests to directory: cmd_samples/init/03_init_with_force
+=== RUN   TestCLI
+    gydnc_cli_harness_test.go:181: Discovered 1 test cases
+=== RUN   TestCLI/.
+    [test execution details...]
+TEST_SUMMARY_MARKER: . - PASS (0.02s)
+--- PASS: TestCLI (0.36s)
+==============================
+TestCLI Suite Summary: 1 passed, 0 failed, 1 total
+==============================
+```
+
+### Key Indicators
+- **"Filtering integration tests to directory:"** - Confirms filtering is working
+- **"Discovered 1 test cases"** - Shows only one test was found and run
+- **Test summary shows correct count** - Should match expected number of tests
+
+## Implementation Details
+
+The filtering works through:
+1. `Makefile` sets `GYDNC_TEST_SUITE_DIR` environment variable from `DIR` parameter
+2. Test harness reads this variable in `discoverTestCases()` function
+3. Only tests in the specified directory path are discovered and executed
+
+## Examples
+
+### Run Force Flag Test
+```bash
+make test-integration DIR=cmd_samples/init/03_init_with_force
+```
+
+### Run All Init Tests
+```bash
+make test-integration DIR=cmd_samples/init
+```
+
+### Run All Create Tests
+```bash
+make test-integration DIR=cmd_samples/create
+```
+
+### Debug Test Development
+When developing or debugging a specific test, use the directory approach to get faster feedback:
+```bash
+# Iterate quickly on a single test
+make test-integration DIR=cmd_samples/your/test/path
+```
+
+## Troubleshooting
+
+### No Tests Found
+If you see "No test cases found", verify:
+- Directory path is correct relative to `gydnc/tests/`
+- Test directory contains both `act.sh` and `assert.yml` files
+- You're running from the `gydnc/` directory (where the Makefile is located)
+
+### All Tests Run Despite DIR Parameter
+If all tests run instead of just the filtered ones:
+- Ensure you're using `DIR=` not `FILTER=`
+- Check that the path doesn't have typos
+- Verify you're in the correct working directory (`gydnc/`)

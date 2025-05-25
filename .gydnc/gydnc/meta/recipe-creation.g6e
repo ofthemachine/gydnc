@@ -1,0 +1,64 @@
+---
+title: Cookbook Recipe Creation Recipe
+description: How to create a new Cookbook recipe for procedural guidance.
+tags:
+    - scope:meta
+    - tech:cookbook
+    - entity:recipe
+    - domain:agent
+    - process:creation
+---
+# Creating Procedural Guidance
+
+## Prerequisites
+- gydnc CLI installed and configured
+- Clear understanding of the procedure to document
+
+## Core Pattern
+```bash
+cat << 'EOF' | gydnc create recipes/domain/action \
+  --title "Action Title" \
+  --description "What this procedure accomplishes" \
+  --tags "type:recipe,domain:area,scope:usage"
+# Action Title
+
+## Prerequisites
+- Required tools/state
+- Starting context
+
+## Steps
+1. First action with command
+2. Second action with command
+3. Verify success
+
+## Troubleshooting
+- Common error: Solution
+EOF
+```
+
+## Alias Structure
+| Pattern | Example | Use |
+|---------|---------|-----|
+| `recipes/<domain>/<action>` | `recipes/blog/post` | Step procedures |
+| `process/<workflow>` | `process/release` | Complex workflows |
+| `must/<topic>` | `must/safety` | Required practices |
+
+## Tags
+- `type:recipe` - Always include
+- `domain:<area>` - Functional area
+- `scope:<usage>` - Where it applies
+- `tech:<tool>` - Tools used
+
+## Verification
+```bash
+gydnc list | grep your-alias  # Verify creation
+gydnc get your/recipe/alias   # Check content
+# Follow steps to verify accuracy
+```
+
+## Maintenance
+```bash
+cat << 'EOF' | gydnc update existing/recipe/alias
+# Updated content
+EOF
+```
