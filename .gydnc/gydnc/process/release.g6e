@@ -2,6 +2,18 @@
 title: gydnc Release Process Guide
 description: Complete workflow for releasing gydnc CLI from the root directory with automated builds and professional release notes
 tags:
+    - quality:high
+    - repo:gydnc
+    - scope:release
+    - target:maintainer
+    - tech:git
+    - tech:github-actions
+    - type:process
+---
+---
+title: gydnc Release Process Guide
+description: Complete workflow for releasing gydnc CLI from the root directory with automated builds and professional release notes
+tags:
     - type:process
     - scope:release
     - repo:gydnc
@@ -67,5 +79,106 @@ git log --oneline ${RELEASE_COMMIT}..HEAD
 # Detailed analysis with commit details
 git log --format="%h|%s|%an|%ad" --date=short ${RELEASE_COMMIT}..HEAD
 ```
-// ... existing code ...
 
+### 2. Release Notes Generation
+
+**Categorize Changes**
+
+Analyze commit messages and categorize them:
+
+- **✨ Features**: `feat:`, `feature:`, `add:`, `new:`, `implement:`
+- **🐛 Bug Fixes**: `fix:`, `bug:`, `patch:`, `resolve:`, `correct:`
+- **⚡ Performance**: `perf:`, `performance:`, `optimize:`, `speed:`
+- **🔧 Improvements**: `improve:`, `enhance:`, `refactor:`, `update:`, `upgrade:`
+- **📚 Documentation**: `docs:`, `doc:`, `documentation:`, `readme:`, `comment:`
+- **🧪 Tests**: `test:`, `tests:`, `testing:`, `spec:`, `coverage:`
+- **🏗️ Build & CI**: `build:`, `ci:`, `cd:`, `workflow:`, `action:`, `makefile`, `docker:`
+
+**Generate Release Statistics**
+```bash
+# Count commits and contributors
+COMMIT_COUNT=$(git rev-list --count ${RELEASE_COMMIT}..HEAD)
+CONTRIBUTOR_COUNT=$(git log --format="%an" ${RELEASE_COMMIT}..HEAD | sort -u | wc -l)
+
+echo "📊 Release Statistics:"
+echo "- $COMMIT_COUNT commits from $CONTRIBUTOR_COUNT contributor(s)"
+echo "- Released on $(date '+%B %d, %Y')"
+```
+
+### 3. Create Release File (releases/)
+
+**CRITICAL PATH**: Create `releases/vX.Y.Z.md` with:
+
+```bash
+# Create release file in the releases/ directory
+# Note the use of 'RELEASE_EOF' to prevent expansion within the here-document
+cat > releases/vX.Y.Z.md << 'RELEASE_EOF'
+# Release content here...
+RELEASE_EOF
+```
+
+Include:
+- Header with version and release-specific stats
+- Categorized changes with commit links
+- Download instructions for all platforms
+- Verification and quick start sections
+- Professional styling with emojis and tables
+
+
+### 4. Trigger Release
+
+1. **Commit the release file**:
+   ```bash
+   git add releases/vX.Y.Z.md
+   git commit -m "gydnc: Release vX.Y.Z"
+   git push origin main
+   ```
+
+2. **GitHub Actions automatically**:
+   - Detects new file in `releases/`
+   - Builds multi-platform gydnc binaries
+   - Creates GitHub release with artifacts
+   - Uses project-specific build configuration
+
+## 🔍 Quality Standards
+
+- **Complete Context**: All content must be clearly about gydnc CLI
+- **Root Directory Awareness**: All paths relative to project root
+- **Beautiful formatting**: Use emojis, tables, and proper markdown
+- **Complete provenance**: Every commit linked with full SHA
+- **Professional tone**: Engaging but informative language
+- **Security focus**: Emphasize binary verification and checksums
+- **User-friendly**: Clear installation and usage instructions
+- **Contributor recognition**: Acknowledge all contributors
+
+## 🎨 Styling Guidelines for Releases
+
+- Use descriptive emojis for visual appeal
+- Structure with clear headers emphasizing gydnc functionality
+- Include code blocks with proper syntax highlighting for gydnc commands
+- Provide direct download links for gydnc binaries
+- Add verification instructions for installations
+- Include quick start guides
+
+## ⚠️ Common Pitfalls to Avoid
+
+1. **Wrong Directory**: Not working from project root directory
+2. **Wrong File Path**: Creating release files outside `releases/`
+3. **Build Context**: GitHub Actions expect root project structure
+
+## 🔄 Verification Steps
+
+Before finalizing any release:
+
+```bash
+# Verify you're in project root directory
+test -f go.mod && echo "✅ Correct directory (found go.mod)" || echo "❌ Wrong directory"
+
+# Verify release file is in correct location
+ls -la releases/v*.md | tail -1
+
+# Verify recent commits
+git log --oneline HEAD~5..HEAD
+```
+
+This process ensures every gydnc release is beautifully documented, properly verified, and presents a professional image while maintaining the highest security standards **for the gydnc CLI tool**.
