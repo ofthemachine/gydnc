@@ -46,19 +46,30 @@ gydnc get entity1 entity2 entity3
 
 ### 3. Create New Guidance
 
-✅ **CORRECT Pattern (here-document):**
+✅ **PREFERRED & MOST ROBUST (Temporary File Pattern):**
+This is the **most reliable method** for all types of content, especially extensive, complex, or AI-generated guidance.
+```bash
+# 1. Write your complete guidance BODY to a temporary file (e.g., temp-content.md).
+#    The file should ONLY contain the body of the guidance.
+#    All metadata (title, tags, description, etc.) MUST be set via CLI flags.
+#
+#    Example temp-content.md (contains ONLY the body):
+#    This is the main body of the guidance.
+#    It can be extensive and include code blocks.
+
+# 2. Pipe this file into the gydnc command, providing all metadata via flags:
+cat temp-content.md | gydnc create <alias> --title "My Guidance Title" --description "A clear description" --tags "type:filebased,scope:example"
+```
+*Advantages: Highest reliability, avoids complex shell escaping, excellent for long content, easy to integrate with tools/scripts that generate markdown.*
+
+✅ **EFFECTIVE FOR SIMPLER, INLINE CONTENT (Here-document pattern):**
+Suitable for *simpler, manually typed inline content*. Can be error-prone for complex scenarios or AI-generated commands.
 ```bash
 cat << 'EOF' | gydnc create <alias> --title "Title" --tags "tag1,tag2"
-# Your content here
-Multiple lines work perfectly
-Code blocks are preserved
+# Your simpler content here
+Multiple lines work well for manual input.
+Code blocks are preserved.
 EOF
-```
-
-✅ **ALSO EFFECTIVE (temp file):**
-```bash
-# Write content to temp file, then pipe it
-cat temp-content.md | gydnc create <alias> --title "Title" --tags "tag1,tag2"
 ```
 
 #### Alias Hierarchy and Organization
@@ -97,80 +108,12 @@ EOF
 
 ### 4. Update Existing Guidance
 
-✅ **CORRECT Pattern (here-document):**
+✅ **PREFERRED & MOST ROBUST (Temporary File Pattern):**
 ```bash
-cat << 'EOF' | gydnc update <alias>
-# Updated content here
-EOF
-```
-
-✅ **ALSO EFFECTIVE (temp file):**
-```bash
-# Write content to temp file, then pipe it
+# 1. Write your updated guidance BODY to a temporary file (e.g., updated-content.md).
+#    The file should ONLY contain the new body content.
 cat updated-content.md | gydnc update <alias>
 ```
 
-## 🛠 Troubleshooting Common Issues
-
-### "No such file or directory" when piping
-**Problem:** File path resolution issues
-**Solution:** Use here-documents (`cat << 'EOF'`) instead of file references
-
-### "Active backend not initialized"
-**Problem:** Missing configuration or wrong directory
-**Solution:** Ensure proper GYDNC_CONFIG or run `gydnc init` if needed
-
-### Empty content after creation
-**Problem:** Content didn't pipe correctly
-**Solution:** Use the exact here-document pattern shown above
-
-### Session configuration issues
-**Problem:** Environment variables not loaded
-**Solution:** Source user profile: `source ~/.zshrc`
-
-## 📋 Command Reference
-
-| Task | Command Pattern |
-|------|----------------|
-| List all | `gydnc listn` |
-| Get content | `gydnc get <alias>` |
-| Create new | `cat << 'EOF' \| gydnc create must/topic --title "Title" --tags "tags"` |
-| Update existing | `cat << 'EOF' \| gydnc update recipes/domain/action` |
-
-## 🎯 Session Best Practices
-
-1. **Always start:** `gydnc list`
-2. **Identify relevant:** Look for existing guidance before creating
-3. **Retrieve details:** `gydnc get <relevant-aliases>`
-4. **Adapt as needed:** Re-fetch when conversation evolves
-5. **Create/update:** Use proper stdin patterns with here-documents
-6. **Batch operations:** Get multiple entities in one command
-7. **Assume config exists:** Don't run init unnecessarily
-
-### Example: Complete Workflow
-
-```bash
-# 1. Start with overview (MANDATORY)
-gydnc list
-
-# 2. Get relevant guidance
-gydnc get must/safety-first should/code-style
-
-# 3. Create new guidance if needed
-cat << 'EOF' | gydnc create recipes/api/error-handling --title "API Error Handling Guide" --tags "type:recipe,domain:api"
-# API Error Handling Guide
-
-## Overview
-Best practices for handling errors in API responses...
-
-## Implementation Steps
-1. Define error response schema
-2. Implement consistent error codes
-3. Add proper logging
-EOF
-
-# 4. Verify creation
-gydnc get recipes/api/error-handling --output body
+✅ **EFFECTIVE FOR SIMPLER, INLINE CONTENT (Here-document pattern):**
 ```
-
-Follow these patterns and you'll have smooth gydnc interactions every time! 🚀

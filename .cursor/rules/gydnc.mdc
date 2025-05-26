@@ -44,20 +44,16 @@ When creating new guidance entities:
 
    **Temporary File Pattern (Most Robust for Complex/AI-Generated Content):**
     ```bash
-    # 1. Write your complete content to a temporary file (e.g., temp-content.md)
-    #    (Content can include frontmatter, or it can be set by flags)
+    # 1. Write your complete guidance BODY to a temporary file (e.g., temp-content.md).
+    #    The file should ONLY contain the body of the guidance.
+    #    All metadata (title, tags, description, etc.) MUST be set via CLI flags.
     #
-    #    Example temp-content.md:
-    #    ---
-    #    title: My Guidance from File
-    #    tags:
-    #      - example
-    #    ---
+    #    Example temp-content.md (contains ONLY the body):
     #    This is the main body of the guidance.
     #    It can be extensive and include code blocks.
 
-    # 2. Pipe this file into the gydnc command:
-    cat temp-content.md | gydnc create <alias> --title "Override Title if needed" --tags "type:filebased,scope:example"
+    # 2. Pipe this file into the gydnc command, providing all metadata via flags:
+    cat temp-content.md | gydnc create <alias> --title "My Guidance Title" --description "A clear description" --tags "type:filebased,scope:example"
     ```
     *Advantages: Highest reliability, avoids complex shell escaping, excellent for long content, easy to integrate with tools/scripts that generate markdown.*
 
@@ -155,8 +151,10 @@ As the user's needs evolve during a conversation:
 
 3. **Guidance Creation with Temp File (RECOMMENDED FOR ROBUSTNESS):**
     ```bash
-    # Create content in content.md first
-    cat content.md | gydnc create <alias> --title "Title" --tags "tag1,tag2"
+    # 1. Write your guidance BODY to a temporary file (e.g., content.md).
+    #    The file should ONLY contain the body of the guidance.
+    #    All metadata MUST be set via CLI flags.
+    cat content.md | gydnc create <alias> --title "Title" --tags "tag1,tag2" --description "Description"
     ```
 
 4. **Guidance Creation with Here-document (for simpler inline cases):**
@@ -169,7 +167,7 @@ As the user's needs evolve during a conversation:
 5. **Guidance Update (Temp file or Here-document can be used):**
     ```bash
     # Using temp file (recommended for robustness)
-    # Create updated content in updated_content.md first
+    # Create updated BODY content in updated_content.md first
     cat updated_content.md | gydnc update <alias>
 
     # Or using here-document for simpler updates
@@ -190,7 +188,7 @@ As the user's needs evolve during a conversation:
 
 **Empty content after creation:**
 - Problem: Content didn't pipe correctly
-- Solution: Use the exact here-document pattern shown above
+- Solution: Use the exact temporary file or here-document pattern shown above, ensuring temp files for create contain only the body.
 
 **Session configuration issues:**
 - Problem: Environment variables not loaded
