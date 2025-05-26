@@ -1,0 +1,9 @@
+---
+title: Temporary File Location for Gydnc Projects
+tags:
+    - type:must
+    - scope:gydnc
+    - topic:file-management
+---
+
+All temporary files created during gydnc project development or operation MUST be placed in the `tmp/` directory at the root of the project.
