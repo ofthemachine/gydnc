@@ -1,6 +1,6 @@
 # Makefile for gydnc
 
-.PHONY: all build test fmt lint clean version-info help
+.PHONY: all build test fmt lint clean version-info help install
 
 BINARY_NAME=gydnc
 VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo "v0.0.0-dev")

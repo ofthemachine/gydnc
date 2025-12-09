@@ -73,15 +73,23 @@ func (s *ConfigService) InitConfig(targetDir string, backendType string, forceCr
 }
 
 // GetEffectiveConfigPath determines which configuration file to use based on the provided path
-// or environment variables.
+// or environment variables. If a directory is provided, it appends "config.yml" to the path.
 func (s *ConfigService) GetEffectiveConfigPath(cliConfigPath string) (string, error) {
 	if cliConfigPath != "" {
+		// Check if the path is a directory, and if so, append config.yml
+		if info, err := os.Stat(cliConfigPath); err == nil && info.IsDir() {
+			return filepath.Join(cliConfigPath, "config.yml"), nil
+		}
 		return cliConfigPath, nil
 	}
 
 	// Check environment variable
 	envConfig := os.Getenv("GYDNC_CONFIG")
 	if envConfig != "" {
+		// Check if the env path is a directory, and if so, append config.yml
+		if info, err := os.Stat(envConfig); err == nil && info.IsDir() {
+			return filepath.Join(envConfig, "config.yml"), nil
+		}
 		return envConfig, nil
 	}
 

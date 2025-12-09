@@ -1,0 +1,16 @@
+exit_code: 0
+stdout:
+  - match_type: SUBSTRING
+    content: '"id":2'
+  - match_type: SUBSTRING
+    content: '"result"'
+  - match_type: SUBSTRING
+    content: '# MCP Get Test'
+  - match_type: SUBSTRING
+    content: 'MCP Get Test'
+  - match_type: SUBSTRING
+    content: 'Test description'
+  - match_type: SUBSTRING
+    content: 'MCP Get Test Body'
+stderr: []
+
