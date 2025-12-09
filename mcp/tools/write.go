@@ -85,9 +85,6 @@ func handleCreateOperation(ctx context.Context, entityService *service.EntitySer
 	}
 
 	backendName := input.Backend
-	if backendName == "" {
-		backendName = ""
-	}
 
 	savedBackendName, err := entityService.SaveEntity(entity, backendName)
 	if err != nil {
