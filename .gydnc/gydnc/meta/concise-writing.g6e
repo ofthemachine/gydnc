@@ -1,0 +1,59 @@
+---
+title: Concise gydnc Writing
+description: Core principles for writing concise, actionable gydnc guidance that cuts fluff and front-loads critical information
+tags:
+    - type:meta
+    - scope:gydnc
+    - domain:writing
+    - quality:concise
+---
+# Concise gydnc Writing
+
+## Rule
+Every word must earn its place. Front-load actions. Cut fluff.
+
+## Patterns
+
+### Structure
+```
+✅ "Run `command` to do X"
+✅ "Update Y: `command --flag`"
+❌ "You should run this command to..."
+❌ "This is useful for..."
+```
+
+### Content Rules
+- **Lead with verbs**: "Run", "Create", "Fix"
+- **Cut filler**: Remove "just", "simply", "basically", "actually"
+- **Active voice**: "Run command" not "Command should be run"
+- **One action per sentence**
+- **Skip obvious statements**
+
+### Must/Should Format
+```
+✅ "Handle all errors explicitly. Silent failures mask problems."
+❌ "It's important to handle errors because..."
+```
+
+### Recipe Format
+```
+✅
+1. Run `command-one`
+2. Verify output contains "expected"
+3. If failure, check X
+
+❌ Explanatory text between steps
+```
+
+## Quality Gates
+- [ ] Can execute without additional research?
+- [ ] Under 20 words per sentence?
+- [ ] Every sentence actionable or definitional?
+- [ ] No filler words?
+
+## Anti-Patterns
+- ❌ Verbose introductions
+- ❌ "This guidance will help you..."
+- ❌ Background context unless it changes behavior
+- ❌ Implementation details unless debugging
+- ❌ Defensive language ("probably", "might")
